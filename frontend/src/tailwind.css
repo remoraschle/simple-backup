@@ -1,0 +1,51 @@
+/*
+ * Tailwind-Einbindung.
+ *
+ * Diese Datei wird VOR styles.scss geladen (siehe angular.json) und legt damit die
+ * Reihenfolge der CSS-Layer fuer die gesamte Anwendung fest. Das ist der Kern der
+ * Zusammenarbeit von Tailwind und Angular Material:
+ *
+ *   tw-base       Tailwinds Preflight -- setzt Rahmen, Abstaende und Schriftgroessen zurueck
+ *   material      Angular Materials Komponentenstile -- muessen NACH dem Reset kommen,
+ *                 sonst nimmt Preflight ihnen Rahmen und Hintergruende weg
+ *   tw-utilities  Utility-Klassen -- muessen ZULETZT kommen, damit sie im eigenen Markup
+ *                 gewinnen
+ *
+ * Ohne diese Festlegung entscheidet die Ladereihenfolge, und die aendert sich beim naechsten
+ * Umbau unbemerkt.
+ */
+@layer tw-theme, tw-base, material, tw-components, tw-utilities;
+
+@import 'tailwindcss/theme.css' layer(tw-theme);
+@import 'tailwindcss/preflight.css' layer(tw-base);
+@import 'tailwindcss/utilities.css' layer(tw-utilities);
+
+/*
+ * Eine einzige Farbquelle.
+ *
+ * Die Utilities leiten ihre Farben aus den System-Variablen von Angular Material ab, statt
+ * eine zweite Palette zu pflegen. Damit stimmen `bg-surface` und ein `mat-card` immer
+ * ueberein -- auch im Dark Mode, wo zwei getrennt gepflegte Paletten sonst garantiert
+ * auseinanderlaufen.
+ */
+@theme {
+  --color-surface: var(--mat-sys-surface);
+  --color-surface-container: var(--mat-sys-surface-container);
+  --color-surface-container-high: var(--mat-sys-surface-container-high);
+  --color-on-surface: var(--mat-sys-on-surface);
+  --color-on-surface-variant: var(--mat-sys-on-surface-variant);
+  --color-primary: var(--mat-sys-primary);
+  --color-on-primary: var(--mat-sys-on-primary);
+  --color-error: var(--mat-sys-error);
+  --color-on-error: var(--mat-sys-on-error);
+  --color-outline: var(--mat-sys-outline);
+  --color-outline-variant: var(--mat-sys-outline-variant);
+
+  /* Statusfarben der Laufergebnisse. Bewusst nicht allein ueber Farbe kommuniziert --
+     in der Oberflaeche traegt zusaetzlich immer ein Symbol und ein Text die Aussage. */
+  --color-status-success: light-dark(#1b7f4b, #4ade80);
+  --color-status-partial: light-dark(#9a6700, #fbbf24);
+  --color-status-failed: light-dark(#b3261e, #f87171);
+  --color-status-running: light-dark(#0b5cad, #60a5fa);
+  --color-status-idle: light-dark(#5f6368, #9ca3af);
+}

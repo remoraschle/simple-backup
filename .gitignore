@@ -24,3 +24,7 @@ secrets/
 # Logs und Laufzeitdaten
 *.log
 /data/
+
+# Angular
+/frontend/.angular/
+/frontend/dist/

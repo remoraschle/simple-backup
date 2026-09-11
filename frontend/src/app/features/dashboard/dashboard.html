@@ -1,0 +1,21 @@
+<h1 class="mb-6 text-2xl font-medium">Uebersicht</h1>
+
+<mat-card class="max-w-2xl">
+  <mat-card-content class="flex flex-col items-start gap-4 py-8">
+    <mat-icon class="scale-150 text-on-surface-variant">inbox</mat-icon>
+
+    <div>
+      <h2 class="m-0 text-lg font-medium">Noch kein Backup-Plan angelegt</h2>
+      <p class="mt-2 mb-0 max-w-prose text-on-surface-variant">
+        Ein Plan verbindet eine Quelle mit einem oder mehreren Zielen und einem Zeitplan.
+        Sobald Plaene laufen, stehen hier ihr letzter Zustand, die naechste Ausfuehrung und
+        die Belegung der Ziele.
+      </p>
+    </div>
+
+    <a matButton="filled" routerLink="/plaene">
+      <mat-icon>add</mat-icon>
+      Plan anlegen
+    </a>
+  </mat-card-content>
+</mat-card>

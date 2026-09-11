@@ -1,0 +1,33 @@
+// Angular-Material-Theme.
+//
+// Wird nach tailwind.css geladen und traegt seine Stile in den dort deklarierten Layer
+// `material` ein -- zwischen Tailwinds Reset und den Utility-Klassen.
+@use '@angular/material' as mat;
+
+@layer material {
+  html {
+    height: 100%;
+    @include mat.theme(
+      (
+        color: (
+          primary: mat.$azure-palette,
+          tertiary: mat.$blue-palette,
+        ),
+        typography: Roboto,
+        density: 0,
+      )
+    );
+  }
+
+  body {
+    // Folgt der Systemeinstellung des Benutzers. Ein Werkzeug, das man nachts um drei
+    // oeffnet, weil ein Backup fehlgeschlagen ist, sollte nicht blenden.
+    color-scheme: light dark;
+
+    background-color: var(--mat-sys-surface);
+    color: var(--mat-sys-on-surface);
+    font: var(--mat-sys-body-medium);
+    margin: 0;
+    height: 100%;
+  }
+}

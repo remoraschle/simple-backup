@@ -1,0 +1,62 @@
+<mat-sidenav-container class="h-dvh">
+  <mat-sidenav mode="side" [opened]="sidenavOpen()" class="w-60 border-r border-outline-variant">
+    <div class="flex items-center gap-2 px-4 py-4">
+      <mat-icon class="text-primary">backup</mat-icon>
+      <span class="font-medium">simple-backup</span>
+    </div>
+
+    <mat-nav-list>
+      @for (entry of navigation; track entry.path) {
+        <a
+          mat-list-item
+          [routerLink]="entry.path"
+          routerLinkActive
+          #link="routerLinkActive"
+          [routerLinkActiveOptions]="{ exact: entry.path === '/' }"
+          [activated]="link.isActive"
+        >
+          <mat-icon matListItemIcon>{{ entry.icon }}</mat-icon>
+          <span matListItemTitle>{{ entry.label }}</span>
+        </a>
+      }
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="flex flex-col">
+    <mat-toolbar class="flex items-center gap-2 border-b border-outline-variant">
+      <button matIconButton (click)="toggleSidenav()" aria-label="Navigation ein- oder ausblenden">
+        <mat-icon>menu</mat-icon>
+      </button>
+
+      <span class="flex-1"></span>
+
+      @if (session(); as current) {
+        <button matIconButton [matMenuTriggerFor]="userMenu" [matTooltip]="current.username ?? ''"
+                aria-label="Benutzermenue">
+          <mat-icon>account_circle</mat-icon>
+        </button>
+
+        <mat-menu #userMenu="matMenu">
+          <div class="px-4 py-2">
+            <p class="m-0 font-medium">{{ current.username }}</p>
+            <p class="m-0 text-sm text-on-surface-variant">
+              {{ current.role === 'ADMIN' ? 'Administrator' : 'Nur Lesezugriff' }}
+            </p>
+          </div>
+          <a mat-menu-item routerLink="/passwort">
+            <mat-icon>key</mat-icon>
+            <span>Passwort aendern</span>
+          </a>
+          <button mat-menu-item (click)="logout()">
+            <mat-icon>logout</mat-icon>
+            <span>Abmelden</span>
+          </button>
+        </mat-menu>
+      }
+    </mat-toolbar>
+
+    <main class="flex-1 overflow-auto p-6">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>
