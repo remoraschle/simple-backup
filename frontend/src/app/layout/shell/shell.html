@@ -31,8 +31,12 @@
       <span class="flex-1"></span>
 
       @if (session(); as current) {
-        <button matIconButton [matMenuTriggerFor]="userMenu" [matTooltip]="current.username ?? ''"
-                aria-label="Benutzermenue">
+        <button
+          matIconButton
+          [matMenuTriggerFor]="userMenu"
+          [matTooltip]="current.username ?? ''"
+          aria-label="Benutzermenue"
+        >
           <mat-icon>account_circle</mat-icon>
         </button>
 

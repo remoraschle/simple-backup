@@ -1,18 +1,28 @@
 # simple-backup
 
 Selbst gehostetes Web-Tool zum Verwalten, Planen, Überwachen und Wiederherstellen von Backups.
-Es orchestriert erprobte Linux-Werkzeuge (`restic`, `rsync`, `rclone`, `pg_dump`, `git`) statt eigene Backup-Technik zu erfinden.
+Es orchestriert erprobte Linux-Werkzeuge (`restic`, `rsync`, `rclone`, `pg_dump`, `git`)
+statt eigene Backup-Technik zu erfinden — die Daten bleiben damit auch ohne dieses Werkzeug
+wiederherstellbar.
 
 **Quellen:** GitHub-Repos · S3-Buckets · PostgreSQL · FTP/SFTP · lokale Ordner & NAS-Shares · Blockdevices
 **Ziele:** lokale Festplatte · UniFi NAS · S3 / S3-kompatibel · SFTP
 
 ## Status
 
-Konzeptphase. Es gibt noch keinen Code.
+**Meilenstein M0 — Gerüst.** Anmeldung, Datenbankschema, verschlüsselte Zugangsdaten,
+Container-Aufbau und CI stehen. Der Ausführungsteil (Runner, Scheduler, echte Backups) folgt
+mit M1 und M2.
 
-👉 **[docs/konzept.md](docs/konzept.md)** — Architektur, Domänenmodell, Adapter, Sicherheit, Stack, Roadmap.
+## Dokumentation
 
-## Architekturentscheidungen
+| | |
+|---|---|
+| **[Konzept](docs/konzept.md)** | Architektur, Domänenmodell, Quell-Adapter, Sicherheit, Roadmap |
+| **[Betrieb](docs/betrieb.md)** | Installation, NAS einbinden, rootless Docker, Fehlersuche |
+| **[Restore-Runbook](docs/restore-runbook.md)** | Wie man **ohne** dieses Werkzeug an die Daten kommt |
+
+### Architekturentscheidungen
 
 | ADR | Entscheidung |
 |---|---|
@@ -24,6 +34,44 @@ Konzeptphase. Es gibt noch keinen Code.
 | [0006](docs/adr/0006-build-maven.md) | Maven als Build-Tool |
 | [0007](docs/adr/0007-benachrichtigung-pushover.md) | Pushover als primärer Alarmkanal |
 
-## Stack (geplant)
+## Schnellstart
 
-Java 25 · Spring Boot 4.1 · Maven · PostgreSQL 18 · Angular 22 · Angular Material · Tailwind 4 · Docker Compose
+```bash
+cp .env.example .env && $EDITOR .env
+mkdir -p secrets && openssl rand -base64 32 > secrets/master_key && chmod 600 secrets/master_key
+docker compose up -d
+docker compose logs backend | grep -A6 Erststart    # Erstpasswort ablesen
+```
+
+> Den Masterkey in den Passwortmanager kopieren. Ohne ihn sind alle gespeicherten
+> Zugangsdaten verloren.
+
+Ausführlich in **[docs/betrieb.md](docs/betrieb.md)**.
+
+## Entwicklung
+
+```bash
+docker compose -f compose.dev.yaml up -d     # Postgres, MinIO, SFTP, Beispiel-Datenbank
+
+cd backend  && ./mvnw spring-boot:run        # http://localhost:8081
+cd frontend && npm start                     # http://localhost:4200
+```
+
+Tests:
+
+```bash
+cd backend  && ./mvnw verify                 # startet PostgreSQL via Testcontainers
+cd frontend && npx ng test --watch=false
+```
+
+Ohne Docker lässt sich eine vorhandene PostgreSQL-Instanz verwenden:
+
+```bash
+SIMPLEBACKUP_TEST_DB_URL=jdbc:postgresql://localhost:5432/simplebackup_test ./mvnw verify
+```
+
+## Stack
+
+Java 25 · Spring Boot 4.1 · Spring Modulith · Maven · PostgreSQL 18 · Flyway
+Angular 22 · Angular Material · Tailwind 4 · Vitest
+Docker Compose · GitHub Actions

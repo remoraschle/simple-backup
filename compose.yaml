@@ -1,0 +1,127 @@
+# Betrieb von simple-backup.
+#
+# Vor dem ersten Start:
+#   1. cp .env.example .env
+#   2. Masterkey erzeugen und in secrets/master_key ablegen:
+#        mkdir -p secrets && openssl rand -base64 32 > secrets/master_key
+#        chmod 600 secrets/master_key
+#      Diesen Schluessel zusaetzlich im Passwortmanager sichern. Ohne ihn sind alle
+#      gespeicherten Zugangsdaten verloren.
+#   3. Unter "backend" die zu sichernden Verzeichnisse als Volume eintragen (siehe unten).
+
+name: simple-backup
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-simplebackup}
+      POSTGRES_USER: ${POSTGRES_USER:-simplebackup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss in .env gesetzt sein}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-simplebackup}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  # Gefilterter Zugang zur Docker-API.
+  #
+  # Nur dieser Container sieht den Socket. Wer die Docker-API unbeschraenkt erreicht, ist auf
+  # dem Host faktisch Wurzel -- er koennte einen privilegierten Container mit / als Mount
+  # starten. Der Proxy laesst deshalb ausschliesslich durch, was fuer das Starten und
+  # Auswerten von Runner-Containern gebraucht wird.
+  dockerproxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:0.3.0
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1   # Runner anlegen, starten, beobachten, entfernen
+      IMAGES: 1       # Runner-Images pruefen und ziehen
+      INFO: 1         # erkennen, ob der Daemon rootful oder rootless laeuft
+      POST: 1         # ohne dies waere alles nur lesbar
+      EXEC: 0         # kein docker exec in fremde Container
+      VOLUMES: 0
+      NETWORKS: 0
+      BUILD: 0
+      SWARM: 0
+      SYSTEM: 0
+      AUTH: 0
+      SECRETS: 0
+      CONFIGS: 0
+      NODES: 0
+      SERVICES: 0
+      TASKS: 0
+      PLUGINS: 0
+      DISTRIBUTION: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Kein ports-Eintrag: Waere der Proxy von aussen erreichbar, waere die Filterung wertlos.
+    networks: [internal]
+
+  backend:
+    image: ghcr.io/remoraschle/simple-backup:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      dockerproxy:
+        condition: service_started
+    environment:
+      SIMPLEBACKUP_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-simplebackup}
+      SIMPLEBACKUP_DB_USER: ${POSTGRES_USER:-simplebackup}
+      SIMPLEBACKUP_DB_PASSWORD: ${POSTGRES_PASSWORD:?}
+      SIMPLEBACKUP_MASTER_KEY_FILE: /run/secrets/master_key
+      # Hinter einem TLS-terminierenden Reverse Proxy auf true setzen.
+      SIMPLEBACKUP_COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      DOCKER_HOST: tcp://dockerproxy:2375
+      TZ: ${TZ:-Europe/Zurich}
+    secrets:
+      - master_key
+    volumes:
+      - staging:/var/lib/simple-backup/staging
+      - logs:/var/lib/simple-backup/logs
+
+      # ------------------------------------------------------------------------------
+      # Zu sichernde Verzeichnisse und Backup-Ziele hier eintragen.
+      #
+      # Diese Eintraege sind auch dann noetig, wenn das Backend die Daten selbst nie liest:
+      # Es leitet aus der eigenen Mount-Tabelle ab, welcher Container-Pfad zu welchem
+      # Host-Pfad gehoert, und nur damit kann ein Runner-Container die Daten erreichen.
+      # Was das Backend nicht gemountet hat, kann kein Runner sichern.
+      #
+      # Quellen immer nur lesend einhaengen -- das Werkzeug hat auf den Originaldaten
+      # nichts zu schreiben.
+      # ------------------------------------------------------------------------------
+      # - /srv/fotos:/sources/fotos:ro
+      # - /mnt/nas:/mnt/nas
+    networks: [internal]
+
+  web:
+    image: ghcr.io/remoraschle/simple-backup-web:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    networks: [internal]
+
+secrets:
+  master_key:
+    file: ./secrets/master_key
+
+volumes:
+  dbdata:
+  staging:
+  logs:
+
+networks:
+  internal:

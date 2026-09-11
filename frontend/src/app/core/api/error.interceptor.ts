@@ -22,7 +22,9 @@ export const errorInterceptor: HttpInterceptorFn = (request, next) => {
 
       if (error.status === 401 && !isSessionProbe) {
         auth.handleSessionExpired();
-        snackBar.open('Die Sitzung ist abgelaufen. Bitte erneut anmelden.', 'OK', { duration: 6000 });
+        snackBar.open('Die Sitzung ist abgelaufen. Bitte erneut anmelden.', 'OK', {
+          duration: 6000,
+        });
       } else if (error.status === 403) {
         snackBar.open('Dafuer fehlt die Berechtigung.', 'OK', { duration: 6000 });
       } else if (!isSessionProbe && error.status !== 0) {
@@ -38,5 +40,7 @@ export const errorInterceptor: HttpInterceptorFn = (request, next) => {
 
 function messageFor(error: HttpErrorResponse): string {
   const detail = error.error?.detail;
-  return typeof detail === 'string' && detail.length > 0 ? detail : 'Die Anfrage ist fehlgeschlagen.';
+  return typeof detail === 'string' && detail.length > 0
+    ? detail
+    : 'Die Anfrage ist fehlgeschlagen.';
 }
