@@ -1,7 +1,7 @@
 # Konzept: simple-backup
 
-> Status: **Entwurf zur Abstimmung** · Stand: 2026-09-11
-> Entscheidungen **E-1 bis E-4 sind getroffen** und im Text eingearbeitet; noch offen sind **E-5** und **E-6** ([§14](#14-offene-entscheidungen)).
+> Status: **Abgestimmt** · Stand: 2026-09-11
+> Alle Ausgangsentscheidungen sind getroffen und im Text eingearbeitet — Übersicht in [§14](#14-entscheidungen), Begründungen in den [ADRs](adr/).
 
 ---
 
@@ -241,12 +241,27 @@ Wer die Docker-API erreicht, ist auf dem Host faktisch root — er kann einen pr
 | `GET /containers/{id}/json` · `/logs` · `/json` | Status, Logs, Wiederanlauf-Suche |
 | `DELETE /containers/{id}` | Aufräumen |
 | `GET /images/json` · `POST /images/create` | Runner-Images prüfen und ziehen |
+| `GET /info` | Erkennen, ob der Daemon rootful oder rootless läuft ([§6.2.1](#621-beide-betriebsmodi-unterstützen-e-6-entschieden)) |
 
 Alles andere — `/exec`, `/volumes`, `/networks`, `/build`, `/commit`, Swarm — wird geblockt.
 
 **2. Der Proxy erzwingt Grenzen, nicht das Backend.** Ein Create-Request wird abgelehnt, wenn er `Privileged`, `CapAdd`, `PidMode: host`, `NetworkMode: host` oder einen Bind-Mount außerhalb der Allowlist enthält. Diese Prüfung gehört in den Proxy, weil sie dann auch bei kompromittiertem Backend noch greift. Das Backend validiert zusätzlich — aber Verlass ist auf die äußere Schicht.
 
-**3. Rootless.** Läuft der Docker-Daemon rootless (oder Podman im rootless-Socket-Modus), ist die Eskalation auf den unprivilegierten Docker-Nutzer begrenzt statt auf root. Empfohlen, aber nicht erzwungen — das ist eine Host-Entscheidung. `[E-6]`
+**3. Rootless.** Läuft der Docker-Daemon rootless (oder Podman im rootless-Socket-Modus), ist die Eskalation auf den unprivilegierten Docker-Nutzer begrenzt statt auf root.
+
+### 6.2.1 Beide Betriebsmodi unterstützen *(E-6 entschieden)*
+
+Das Tool muss auf rootful **und** rootless Docker laufen. Der Socket-Pfad unterscheidet sich zwar (`/var/run/docker.sock` vs. `$XDG_RUNTIME_DIR/docker.sock`), aber das ist reine Compose-Konfiguration — das Backend spricht ohnehin nur `tcp://dockerproxy:2375`. Drei echte Unterschiede müssen dagegen im Code berücksichtigt werden:
+
+**Modus-Erkennung.** Beim Start liest das Backend `GET /info`; enthält `SecurityOptions` den Eintrag `name=rootless`, läuft der Daemon rootless. Das Ergebnis steuert, welche Funktionen die UI überhaupt anbietet — der Proxy muss `/info` deshalb durchlassen.
+
+**Blockdevices gibt es nur rootful.** Ohne root darf kein Container ein `/dev/sdX` durchgereicht bekommen. Statt den Nutzer nachts mit einem kryptischen Permission-Fehler zu überraschen, wird der Quelltyp „Blockdevice" im rootless-Modus **gar nicht erst angeboten**, mit sichtbarer Begründung. Eine Funktion, die man nicht anlegen kann, ist besser als eine, die beim ersten echten Lauf scheitert.
+
+**User-Namespace-Mapping.** Rootless Docker bildet Container-UIDs über `subuid`/`subgid` auf andere Host-UIDs ab. Eine Datei, die dem Host-Nutzer gehört, ist im Runner unter Umständen nicht lesbar — und das fällt sonst erst beim ersten nächtlichen Lauf auf. Zwei Konsequenzen:
+
+- UID/GID des Runners sind über `PUID`/`PGID` konfigurierbar; das Tool nimmt nirgends eine feste UID an.
+- Der **Verbindungstest einer Quelle läuft im Runner-Container**, nicht im Backend. Nur so testet man die Rechte, die später tatsächlich gelten. Ein Test, der im Backend grün ist und im Runner rot, wäre schlimmer als kein Test.
+- Ownership-erhaltendes `rsync -a` funktioniert rootless nur innerhalb des Mappings. Im Mirror-Modus wird das erkannt und dokumentiert statt still falsche Eigentümer zu schreiben.
 
 ### 6.3 Ablauf eines Schritts
 
@@ -369,14 +384,29 @@ Ein ungeprüftes Backup ist eine Vermutung. Als eigener Plantyp:
 - Globale Ampel oben: „alles grün" / „N Pläne rot" / „N überfällig".
 - Speicherbelegung je Ziel inkl. Trend — freier Platz ist der Grund Nr. 1 für plötzlich fehlschlagende Backups.
 
-### 8.2 Kanäle
-SMTP (E-Mail), generischer Webhook (JSON, für n8n/Home Assistant/Gotify), **ntfy** (Push aufs Handy, selbst hostbar), Telegram, Slack/Discord. Ein Kanal-Interface, Implementierungen austauschbar.
+### 8.2 Kanäle *(entschieden: Pushover)*
 
-Auslöser: `RUN_FAILED`, `RUN_PARTIAL`, `RUN_SUCCESS` (optional), `PLAN_OVERDUE`, `TARGET_UNREACHABLE`, `STORAGE_LOW`, `VERIFY_FAILED`, `RETENTION_WOULD_DELETE_ALL`.
+**Pushover** ist der primäre Kanal. Die API ist ein einzelner HTTP-POST an `api.pushover.net/1/messages.json` mit App-Token und User-Key — beides landet in der verschlüsselten Secret-Ablage.
+
+Der entscheidende Vorteil gegenüber anderen Push-Diensten ist die **Emergency-Priorität** (`priority=2`): Pushover wiederholt die Meldung in einem konfigurierbaren Intervall, bis sie auf dem Gerät **quittiert** wird. Genau das braucht ein fehlgeschlagenes Backup — eine Push-Nachricht, die man morgens um sieben verschlafen wegwischt, hat ihren Zweck verfehlt. Die Prioritätszuordnung:
+
+| Ereignis | Priorität |
+|---|---|
+| `RUN_FAILED`, `VERIFY_FAILED`, `RETENTION_WOULD_DELETE_ALL` | `2` — Emergency, Quittierung erforderlich |
+| `RUN_PARTIAL`, `PLAN_OVERDUE`, `TARGET_UNREACHABLE`, `STORAGE_LOW` | `1` — hoch, umgeht Ruhezeiten |
+| `RUN_SUCCESS` (optional), Erholungsmeldungen | `-1` — leise |
+
+Pushovers Kontingent liegt bei 10.000 Nachrichten pro Monat und App. Der Rest wird im Antwort-Header `X-Limit-App-Remaining` mitgeliefert, ausgewertet und als Metrik geführt — ein aufgebrauchtes Kontingent legt sonst stillschweigend die gesamte Alarmierung lahm.
+
+**Ebenfalls in v1: der generische Webhook.** Nicht weil du ihn angefragt hättest, sondern weil die Kanal-Abstraktion ohnehin entsteht und ein JSON-POST an eine frei wählbare URL danach etwa dreißig Zeilen kostet. Damit hängst du später n8n, Home Assistant oder Gotify an, ohne dass jemand Code anfassen muss.
+
+**Ein Hinweis, keine Forderung:** Ein einziger Alarmkanal ist selbst ein Single Point of Failure — Kontingent aufgebraucht, Account-Problem, Dienst gestört. Der externe Dead-Man-Switch aus §8.3 federt das ab, weil er unabhängig von diesem Tool und von Pushover alarmiert. Solltest du später doch einen zweiten Kanal wollen, ist SMTP die naheliegende Ergänzung; die Architektur hält den Platz dafür frei.
+
+Weitere Kanäle (SMTP, ntfy, Telegram, Slack) sind über dieselbe Schnittstelle nachrüstbar und stehen nicht im Weg, solange sie niemand konfiguriert.
 
 **Zustellung robust:** Benachrichtigungen laufen über eine Outbox-Tabelle mit Wiederholung. Eine Alarmmeldung, die selbst verloren geht, ist schlimmer als keine.
 
-**Anti-Spam:** Wiederholte Fehler desselben Plans werden zusammengefasst (erster Fehler sofort, danach gedrosselt), plus eine Meldung beim Wiedererholen („Plan X läuft wieder").
+**Anti-Spam:** Wiederholte Fehler desselben Plans werden zusammengefasst (erster Fehler sofort, danach gedrosselt), plus eine Meldung beim Wiedererholen („Plan X läuft wieder"). Emergency-Meldungen werden nach der Quittierung nicht erneut eskaliert, solange sich der Zustand nicht ändert.
 
 ### 8.3 Dead-Man-Switch — das wichtigste Monitoring-Feature
 
@@ -432,22 +462,32 @@ Zu schützen: GitHub-PATs, S3-Keys, SSH-Keys, DB-Passwörter, restic-Repository-
 
 Virtuelle Threads passen hier ausgesprochen gut: Ein Backup-Lauf ist zu 99 % Warten auf einen Kindprozess. Ein Thread pro Lauf ist das einfachste Modell — mit virtuellen Threads ist es auch das billigste, kein Reactive-Programmiermodell nötig.
 
-### Frontend
+### Frontend *(E-5 entschieden)*
+
 | Baustein | Version | Begründung |
 |---|---|---|
-| Angular | **22.1** (oder **21.2 LTS** `[E-5]`) | Standalone Components, Signals, `@if`/`@for`, Zoneless |
+| Angular | **22.1** | Standalone Components, Signals, `@if`/`@for`, Zoneless |
 | TypeScript | passend zum Angular-Release | `strict` von Anfang an |
-| UI-Bibliothek | Angular Material **oder** PrimeNG `[E-5]` | Material: schlank, Standard; PrimeNG: viel mehr fertige Tabellen/Trees |
+| Angular Material + CDK | **22.1** | Komponenten vom Angular-Team, gleicher Release-Tag wie das Framework, beste Barrierefreiheit |
+| Tailwind CSS | **4.3** | Layout, Abstände, Typografie — alles außerhalb der Material-Komponenten |
+| Charts | **eigenes Inline-SVG** | Für Sparklines und einen Speicher-Trend lohnt keine Chart-Bibliothek |
 | State | Signals + Services | NgRx wäre für diese Größe Overhead |
 | API-Client | aus OpenAPI generiert | keine handgeschriebenen DTOs, Brüche fallen beim Build auf |
 | Tests | Vitest + Playwright | |
 
-### Build & CI
-- **Gradle (Kotlin DSL)** für das Backend, Angular-Build als eigener Schritt, im Release-Image zusammengefügt.
-- GitHub Actions: Build → Test → Lint → Container-Scan (Trivy) → Multi-Arch-Image (amd64 **und arm64**, falls das Ziel ein Raspberry Pi oder eine ARM-NAS ist) nach GHCR.
-- Conventional Commits + automatisches Changelog.
+**Material und Tailwind sauber kombinieren.** Die Kombination funktioniert gut, aber nur mit einer klaren Grenze — sonst kämpfen zwei Styling-Systeme um dieselben Elemente:
 
----
+- **Tailwind nur auf eigenen Elementen.** Layout, Grid, Abstände, Typografie. Material-Komponenten werden **nicht** mit Utility-Klassen überschrieben, sondern über Material-3-Tokens (`--mat-*`) gethemt. Wer `class="p-2 bg-white"` auf ein `<mat-form-field>` schreibt, hat beim nächsten Material-Update ein Problem.
+- **Preflight kontrollieren.** Tailwinds Basis-Reset setzt unter anderem Rahmen und Hintergründe zurück und kollidiert damit an Rändern mit Material. Tailwind 4 erlaubt es, die Layer-Reihenfolge explizit zu setzen; Material-Styles gehören hinter Preflight, aber vor die Utilities.
+- **Ein Ort für Farben.** Die Material-3-Palette ist die Quelle der Wahrheit; die Tailwind-Konfiguration leitet ihre Farben aus denselben CSS-Custom-Properties ab. Zwei getrennt gepflegte Paletten driften garantiert auseinander — besonders im Dark Mode.
+
+**Was wir dafür selbst bauen.** Material hat keine TreeTable. Der Snapshot-Browser (Baum aus Verzeichnissen mit Spalten für Größe und Datum, nachgeladen pro Ebene) entsteht aus `cdk-tree` plus `cdk-virtual-scroll-viewport`. Das ist die größte Einzelaufgabe im Frontend und ist in M4 als solche eingeplant, nicht als Nebenbei-Arbeit. Die Lauf-Historie nutzt `MatTable` mit eigener Filterleiste und Zeilenaufklappung für die Schritte.
+
+### Build & CI *(E-5 entschieden)*
+
+- **Maven** für das Backend (`mvnw` im Repo, damit CI und Entwicklungsrechner dieselbe Version nutzen), Angular-Build als eigener Schritt, im Release-Image zusammengefügt.
+- GitHub Actions: Build → Test → Lint → Container-Scan (Trivy) → Multi-Arch-Image (amd64 **und** arm64, falls das Ziel ein Raspberry Pi oder eine ARM-NAS ist) nach GHCR.
+- Conventional Commits + automatisches Changelog.
 
 ## 11. Deployment
 
@@ -505,6 +545,7 @@ TLS und Zugang von außen übernimmt ein vorgelagerter Reverse Proxy (Traefik/Ca
 ```
 simple-backup/
 ├── backend/
+│   ├── pom.xml · mvnw
 │   ├── src/main/java/dev/remo/simplebackup/
 │   │   ├── plan/  source/  target/  engine/  schedule/
 │   │   ├── run/   retention/  restore/  secret/
@@ -512,7 +553,9 @@ simple-backup/
 │   │   └── SimpleBackupApplication.java
 │   └── src/main/resources/db/migration/    # Flyway
 ├── frontend/
-│   └── src/app/{core,shared,features/{dashboard,plans,sources,targets,runs,restore,settings}}
+│   └── src/app/
+│       ├── core/  shared/  ui/          # ui/ = eigene Bausteine, u.a. TreeTable
+│       └── features/{dashboard,plans,sources,targets,runs,restore,settings}
 ├── docker/{backend.Dockerfile,web.Dockerfile,runner.Dockerfile}
 ├── compose.yaml · compose.dev.yaml
 ├── docs/{konzept.md, adr/, betrieb.md, restore-runbook.md}
@@ -530,11 +573,11 @@ simple-backup/
 | **M0 — Gerüst** | Repo, Gradle/Angular-Skelett, Compose inkl. Socket-Proxy, CI, Flyway, Auth, Health | Es läuft, es ist leer |
 | **M1 — Runner-Fundament** | `BackupExecutor`, `DockerJobExecutor`, Host-Pfad-Übersetzung, Secret-tmpfs, Label-Reaper, Wiederanhängen nach Neustart, Runner-Image | Ein Container wird gestartet, überwacht, ausgewertet |
 | **M2 — Erstes echtes Backup** | Quelle „lokaler Pfad/NAS", Ziel „lokal + S3", restic-Engine, Scheduler, Lauf-Historie, Dashboard, Live-Logs | Ordner → S3, geplant, sichtbar |
-| **M3 — Vertrauen** | Benachrichtigungen (SMTP + Webhook + ntfy), Retention/GFS, Dead-Man-Switch | Man erfährt, wenn es kaputt ist |
-| **M4 — Wiederherstellung** | Snapshot-Browser, Restore, Datei-Download, `restic check`, automatischer Restore-Test | Backups sind nachweislich gut |
+| **M3 — Vertrauen** | Benachrichtigungen (Pushover + Webhook), Retention/GFS, Dead-Man-Switch | Man erfährt, wenn es kaputt ist |
+| **M4 — Wiederherstellung** | TreeTable auf CDK-Basis, Snapshot-Browser, Restore, Datei-Download, `restic check`, automatischer Restore-Test | Backups sind nachweislich gut |
 | **M5 — Postgres & GitHub** | pg_dump-Pipeline mit versionspassendem Runner, Globals, Dump-Verifikation, GitHub-Discovery + Mirror + Metadaten | Die beiden wertvollsten Quellen |
 | **M6 — S3, SFTP, rsync-Mirror** | rclone-Adapter, Hostkey-Handling, Mirror-Modus | Quellmatrix im Wesentlichen vollständig |
-| **M7 — Kür** | Blockdevices, Prometheus, OIDC, Konfig-Export/Import, rootless Docker | Betriebsreif |
+| **M7 — Kür** | Blockdevices (nur rootful), Prometheus, OIDC, Konfig-Export/Import, weitere Alarmkanäle | Betriebsreif |
 
 M1 ist wegen der Sidecar-Entscheidung ein eigener Meilenstein und kein Nebenprodukt: Host-Pfad-Übersetzung, Wiederanhängen nach Neustart und das Aufräumen verwaister Container sind die Stellen, an denen dieses Modell scheitert, wenn man sie nebenbei erledigt. Einmal sauber gebaut, ist danach jede weitere Quelle nur noch eine Argumentliste.
 
@@ -542,7 +585,7 @@ M2–M4 zuerst und in dieser Reihenfolge ist ebenfalls Absicht: Lieber **eine** 
 
 ## 14. Entscheidungen
 
-### Getroffen
+Alle sechs Ausgangsfragen sind entschieden. Details jeweils im verlinkten ADR.
 
 | # | Frage | Entscheidung | Begründung |
 |---|---|---|---|
@@ -550,13 +593,10 @@ M2–M4 zuerst und in dieser Reihenfolge ist ebenfalls Absicht: Lieber **eine** 
 | **E-2** | Ausführungsmodell | **Docker-Sidecar-Runner ab v1** | Versionspassendes `pg_dump`, Ressourcengrenzen pro Lauf, Backup überlebt Backend-Neustart; Socket-Risiko per Proxy eingegrenzt ([ADR-0002](adr/0002-sidecar-runner.md)) |
 | **E-3** | Nutzer & Auth | **Single-Admin + VIEWER, Session-Cookie** | Weniger Code und kein XSS-Token-Diebstahl gegenüber JWT; OIDC bleibt nachrüstbar ([ADR-0003](adr/0003-auth-session-cookie.md)) |
 | **E-4** | Erste Quelle | **Lokale Ordner / NAS** | Keine externen Zugangsdaten, damit steht die Maschinerie bevor die kniffligen Adapter kommen ([ADR-0004](adr/0004-erste-quelle-lokale-pfade.md)) |
-
-### Offen
-
-| # | Frage | Optionen | Empfehlung |
-|---|---|---|---|
-| **E-5** | Werkzeugwahl | Angular 22 vs. 21 LTS · Material vs. PrimeNG | **Angular 22 · PrimeNG** — deutlich mehr fertige Tabellen/Trees, und ein Snapshot-Browser ist genau ein Tree. Gradle Kotlin DSL setze ich ohne Rückfrage, falls kein Einwand |
-| **E-6** | Docker-Betriebsmodus | rootful vs. rootless Docker/Podman | **rootless**, wo dein Host es hergibt — begrenzt die Eskalation aus §6.2. Betrifft nur das Deployment, nicht den Code |
+| **E-5a** | UI-Bibliothek | **Angular Material + Tailwind** | Release-Gleichlauf mit Angular und bessere Barrierefreiheit; TreeTable wird dafür selbst gebaut ([ADR-0005](adr/0005-frontend-material-tailwind.md)) |
+| **E-5b** | Build-Tool | **Maven** | Deklarativ, stabil, ohne Einarbeitung lesbar ([ADR-0006](adr/0006-build-maven.md)) |
+| **E-6** | Docker-Modus | **rootful und rootless** | Beide werden unterstützt; Modus wird erkannt, Blockdevices nur rootful angeboten ([§6.2.1](#621-beide-betriebsmodi-unterstützen-e-6-entschieden)) |
+| **E-7** | Alarmierung | **Pushover, plus generischer Webhook** | Emergency-Priorität mit Quittierungspflicht passt exakt zu fehlgeschlagenen Backups ([ADR-0007](adr/0007-benachrichtigung-pushover.md)) |
 
 ---
 
@@ -574,4 +614,7 @@ M2–M4 zuerst und in dieser Reihenfolge ist ebenfalls Absicht: Lieber **eine** 
 | Command-Injection über Konfigurationsfelder | Argumentlisten statt Shell, Eingabe-Allowlist, Validierung zusätzlich im Proxy |
 | `pg_dump`-Versionskonflikt | Runner-Image passend zur Server-Major-Version, Versionsprüfung beim Verbindungstest |
 | Runner-Image fehlt bei Internet-Ausfall | Vorabprüfung beim Backend-Start, gepinnte Tags, klare Fehlermeldung statt Pull mitten im Lauf |
+| Rechteprobleme durch User-Namespace-Mapping (rootless) | Verbindungstest läuft im Runner statt im Backend, PUID/PGID konfigurierbar, keine festen UIDs im Code |
+| Alarmierung fällt mit dem einzigen Kanal aus | Externer Dead-Man-Switch alarmiert unabhängig von Tool und Pushover; Kontingent wird als Metrik überwacht |
+| Tailwind-Reset kollidiert mit Material-Styles | Feste Layer-Reihenfolge, Utilities nie auf Material-Komponenten, eine gemeinsame Farbquelle |
 | Volllaufendes Staging-Volume | Vorab-Größenschätzung, Speicherplatzprüfung vor dem Lauf, Streaming statt Staging wo möglich |
