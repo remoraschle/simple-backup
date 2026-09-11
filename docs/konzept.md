@@ -1,7 +1,7 @@
 # Konzept: simple-backup
 
 > Status: **Entwurf zur Abstimmung** · Stand: 2026-09-11
-> Offene Entscheidungen sind in [§14](#14-offene-entscheidungen) gesammelt und mit `[E-n]` im Text markiert.
+> Entscheidungen **E-1 bis E-4 sind getroffen** und im Text eingearbeitet; noch offen sind **E-5** und **E-6** ([§14](#14-offene-entscheidungen)).
 
 ---
 
@@ -54,7 +54,7 @@ Deshalb trennen wir **Beschaffung** von **Ablage**:
  dd | zstd
 ```
 
-**Storage-Engine der Wahl: `restic`** `[E-1]`
+**Storage-Engine der Wahl: `restic`** *(E-1 entschieden)*
 
 | Kriterium | restic | borg | rsync | rclone |
 |---|---|---|---|---|
@@ -71,7 +71,7 @@ Deshalb trennen wir **Beschaffung** von **Ablage**:
 
 **`rsync` bleibt** als zweiter, gleichberechtigter Engine-Modus für den Fall „ich will eine 1:1-Kopie, die ich ohne jedes Werkzeug im Dateimanager durchklicken kann" — typisch für den NAS-Ordner oder die USB-Platte im Schrank. Diese Kopie ist unverschlüsselt und unversioniert, und genau das ist manchmal gewollt.
 
-> **Empfehlung:** Beide anbieten, `restic` als Default. Pro Ziel wird der Modus gewählt: `RESTIC` (versioniert, verschlüsselt, dedupliziert) oder `MIRROR` (rsync/rclone, 1:1, lesbar).
+> **Entschieden:** Beide, `restic` als Default. Pro Ziel wird der Modus gewählt: `RESTIC` (versioniert, verschlüsselt, dedupliziert) oder `MIRROR` (rsync/rclone, 1:1, lesbar).
 
 ### 2.2 Ein Plan, mehrere Ziele (3-2-1-Regel)
 
@@ -96,11 +96,14 @@ flowchart LR
     subgraph Browser
         UI[Angular SPA]
     end
-    subgraph Docker
+    subgraph Docker-Host
         NG[nginx<br/>static + reverse proxy]
         BE[Spring Boot<br/>backup-backend]
+        PX[docker-socket-proxy<br/>Allowlist]
         DB[(PostgreSQL 18)]
-        VOL[/Volumes:<br/>staging, logs, keys/]
+        R1[Runner-Container<br/>restic/rsync/rclone/git]
+        R2[Runner-Container<br/>postgres:N-alpine]
+        VOL[/Volumes:<br/>staging, logs/]
     end
     subgraph Extern
         GH[GitHub API]
@@ -115,16 +118,22 @@ flowchart LR
 
     UI --> NG --> BE
     BE <--> DB
-    BE --> VOL
-    BE -- "git clone --mirror" --> GH
-    BE -- "pg_dump" --> PG
-    BE -- "rclone" --> S3S
-    BE -- "rclone / lftp" --> SFTP
-    BE -- "rsync / restic" --> NAS
-    BE -- "dd / rsync" --> DISK
-    BE -- "restic" --> S3T
+    BE -- "create/start/wait/logs" --> PX
+    PX -.startet.-> R1
+    PX -.startet.-> R2
+    R1 --- VOL
+    R2 --- VOL
+    R1 -- "git clone --mirror" --> GH
+    R1 -- "rclone" --> S3S
+    R1 -- "rclone / lftp" --> SFTP
+    R1 -- "rsync / restic" --> NAS
+    R1 -- "dd / rsync" --> DISK
+    R1 -- "restic" --> S3T
+    R2 -- "pg_dump" --> PG
     BE -- Events --> SMTP
 ```
+
+Das Backend **berührt die zu sichernden Daten nie selbst.** Es plant, startet, überwacht und protokolliert; die eigentliche Arbeit machen kurzlebige Runner-Container. Das hält das Backend klein und macht den Datenpfad unabhängig vom Anwendungs-Lebenszyklus.
 
 ### 3.1 Backend-Module
 
@@ -183,13 +192,13 @@ erDiagram
 ### 5.2 PostgreSQL
 - **Producer:** `pg_dump -Fc` pro Datenbank + `pg_dumpall --globals-only` für Rollen und Tablespaces (wird gern vergessen und fehlt dann beim Restore).
 - **Pipeline:** `pg_dump ... | restic backup --stdin --stdin-filename db.dump` — kein Staging-Plattenplatz nötig, restic dedupliziert trotzdem chunk-basiert.
-- **Stolperstein:** `pg_dump` muss **mindestens so neu sein wie der Server**. Bei mehreren Ziel-Servern mit verschiedenen Major-Versionen braucht es mehrere Client-Versionen — Hauptargument für das Sidecar-Runner-Modell `[E-2]`.
+- **Stolperstein:** `pg_dump` muss **mindestens so neu sein wie der Server**. Bei mehreren Ziel-Servern mit verschiedenen Major-Versionen braucht es mehrere Client-Versionen — gelöst durch das Sidecar-Runner-Modell ([§6](#6-ausführung-sidecar-runner-über-die-docker-api)).
 - **Verifikation:** `pg_restore --list` auf dem Dump; schlägt das fehl, ist der Dump korrupt und der Lauf `FAILED`, auch wenn `pg_dump` Exit 0 lieferte.
 - **Optional später:** `pg_basebackup` + WAL-Archivierung für Point-in-Time-Recovery.
 
 ### 5.3 GitHub
 - **Producer:** GitHub-API listet Repos (User, Orgs, Filter nach Topic/Sichtbarkeit/Archiv-Status), dann `git clone --mirror` bzw. `git remote update --prune` in einen persistenten Cache und `git bundle create --all` als Artefakt.
-- **Wichtig zu wissen:** Ein Git-Mirror sichert **Code, Branches, Tags, Historie** — aber **nicht** Issues, Pull Requests, Reviews, Releases-Assets, Wiki, Actions-Secrets oder Projektboards. Wer „mein GitHub sichern" sagt, meint meist auch diese Metadaten. Vorschlag: zusätzlicher Schritt, der Issues/PRs/Releases über die REST-API als JSON ablegt (+ Wiki als eigenes Git-Repo, das ist es technisch). `[E-4]`
+- **Wichtig zu wissen:** Ein Git-Mirror sichert **Code, Branches, Tags, Historie** — aber **nicht** Issues, Pull Requests, Reviews, Releases-Assets, Wiki, Actions-Secrets oder Projektboards. Wer „mein GitHub sichern" sagt, meint meist auch diese Metadaten. Deshalb: zusätzlicher Schritt, der Issues/PRs/Releases über die REST-API als JSON ablegt (+ Wiki als eigenes Git-Repo, das ist es technisch).
 - **Rate-Limits:** 5000 req/h authentifiziert; Repo-Discovery wird gecacht, `git`-Operationen zählen nicht gegen das API-Limit.
 
 ### 5.4 S3-Buckets
@@ -209,23 +218,98 @@ erDiagram
 
 ---
 
-## 6. Ausführung: Wie kommen die Tools in den Container?
+## 6. Ausführung: Sidecar-Runner über die Docker-API
 
-`[E-2]` — **die zweite große Entscheidung.**
+**Entschieden (E-2): Jeder Backup-Schritt läuft in einem eigenen, kurzlebigen Container.** Das Backend führt selbst keine externen Prozesse aus; es erzeugt Container über die Docker Engine API, wartet auf sie und wertet sie aus.
 
-**Variante A — Fat Image (alles im Backend-Container)**
-`+` einfach, ein Container, keine Docker-Socket-Freigabe, schnellster Weg zum ersten funktionierenden Backup
-`−` großes Image (~600 MB), genau eine `pg_dump`-Version, Tool-Update = Backend-Neustart
+### 6.1 Warum dieses Modell
 
-**Variante B — Sidecar-Runner (Backend startet Container über den Docker-Socket)**
-`+` `pg_dump` in passender Major-Version pro Job, saubere Ressourcen-/Netz-Isolation je Lauf, Tools unabhängig vom Backend aktualisierbar
-`−` Docker-Socket im Container ist root-äquivalent auf dem Host, deutlich mehr bewegliche Teile
+- `pg_dump` muss mindestens so neu sein wie der Server. Mit Runnern zieht ein Plan gegen Postgres 16 einfach `postgres:16-alpine`, der nächste `postgres:18-alpine`. Im Ein-Container-Modell wäre das eine Sammlung parallel installierter Client-Versionen.
+- Pro Lauf sind **Ressourcen- und Netzgrenzen** setzbar (`memory`, `cpus`, `network`). Ein entlaufener `rclone`-Sync kann das Backend nicht mehr aushungern.
+- Tool-Updates (neue restic-Version) sind ein Image-Tag, kein Backend-Deployment.
+- **Ein Backend-Neustart killt keinen laufenden Backup-Job.** Die Container laufen weiter, das Backend hängt sich beim Hochfahren wieder an sie an. Im Ein-Prozess-Modell wäre ein 4-Stunden-Lauf verloren.
 
-**Variante C — Kubernetes Jobs** — richtig für den Cluster-Betrieb, Overkill für einen Homeserver.
+### 6.2 Der Preis: der Docker-Socket
 
-> **Empfehlung:** **A für v1, aber hinter einer `BackupExecutor`-Schnittstelle** (`LocalProcessExecutor` / später `DockerJobExecutor`). Der Wechsel ist dann eine Implementierung, keine Umbaumaßnahme. Das Image bringt `restic`, `rsync`, `rclone`, `git`, `openssh-client`, `zstd` und `postgresql-client-18` mit; bei Bedarf für ältere Server zusätzlich `postgresql-client-16/17` aus dem PGDG-Repo — die Binaries liegen versionsspezifisch unter `/usr/lib/postgresql/<major>/bin/`, der passende Pfad wird pro Job gewählt.
+Wer die Docker-API erreicht, ist auf dem Host faktisch root — er kann einen privilegierten Container mit `/` als Mount starten. Ein Backend mit ungefiltertem Socket-Zugriff macht jede Backend-Schwachstelle zur vollständigen Host-Übernahme. Drei Maßnahmen, gestaffelt:
 
-### 6.1 Scheduling
+**1. Socket-Proxy statt Socket (Pflicht).** Das Backend bekommt **nie** `/var/run/docker.sock` gemountet, sondern spricht über HTTP mit einem vorgeschalteten Filter (`tecnativa/docker-socket-proxy` oder eigener minimaler Proxy), der nur durchlässt, was gebraucht wird:
+
+| Erlaubt | Zweck |
+|---|---|
+| `POST /containers/create` · `/start` · `/wait` · `/kill` | Lauf starten, beenden, Exit-Code holen |
+| `GET /containers/{id}/json` · `/logs` · `/json` | Status, Logs, Wiederanlauf-Suche |
+| `DELETE /containers/{id}` | Aufräumen |
+| `GET /images/json` · `POST /images/create` | Runner-Images prüfen und ziehen |
+
+Alles andere — `/exec`, `/volumes`, `/networks`, `/build`, `/commit`, Swarm — wird geblockt.
+
+**2. Der Proxy erzwingt Grenzen, nicht das Backend.** Ein Create-Request wird abgelehnt, wenn er `Privileged`, `CapAdd`, `PidMode: host`, `NetworkMode: host` oder einen Bind-Mount außerhalb der Allowlist enthält. Diese Prüfung gehört in den Proxy, weil sie dann auch bei kompromittiertem Backend noch greift. Das Backend validiert zusätzlich — aber Verlass ist auf die äußere Schicht.
+
+**3. Rootless.** Läuft der Docker-Daemon rootless (oder Podman im rootless-Socket-Modus), ist die Eskalation auf den unprivilegierten Docker-Nutzer begrenzt statt auf root. Empfohlen, aber nicht erzwungen — das ist eine Host-Entscheidung. `[E-6]`
+
+### 6.3 Ablauf eines Schritts
+
+```mermaid
+sequenceDiagram
+    participant S as Scheduler
+    participant E as DockerJobExecutor
+    participant P as Socket-Proxy
+    participant C as Runner-Container
+
+    S->>E: execute(step)
+    E->>E: Argumente bauen, Secrets in tmpfs-Volume
+    E->>P: POST /containers/create (Labels, Mounts, Limits)
+    P->>C: erzeugt
+    E->>P: POST /containers/{id}/start
+    E->>P: GET /containers/{id}/logs?follow=1
+    C-->>E: stdout/stderr (Stream)
+    E-->>S: Fortschritt (restic --json)
+    E->>P: POST /containers/{id}/wait
+    C-->>E: ExitCode
+    E->>P: DELETE /containers/{id}
+    E->>E: Secret-Volume löschen, Ergebnis persistieren
+```
+
+**Labels** (`simple-backup.run-id`, `.step-id`, `.managed-by`) machen jeden Container eindeutig zuordenbar — Grundlage für Wiederanlauf und für den Reaper, der beim Start verwaiste Container einsammelt.
+
+**`AutoRemove` bleibt aus.** Ein automatisch entfernter Container nimmt Exit-Code und Logs mit ins Grab. Entfernt wird erst, nachdem das Ergebnis in der Datenbank steht.
+
+### 6.4 Mounts: woher weiß das Backend die Host-Pfade?
+
+Der Knackpunkt des Modells. Das Backend sieht `/sources/photos`; der Runner braucht aber den **Host**-Pfad `/srv/photos`, denn der Docker-Daemon löst Bind-Mounts gegen das Host-Dateisystem auf.
+
+Lösung: **Self-Inspection.** Das Backend fragt beim Start `GET /containers/{eigene-id}/json` ab und liest die eigene Mount-Tabelle (`Source` = Host-Pfad, `Destination` = Container-Pfad). Daraus entsteht eine Übersetzungstabelle, mit der jeder Container-Pfad in den korrekten Host-Pfad umgerechnet wird. Kein doppelt gepflegter Pfad-Katalog, keine Konfiguration, die beim ersten Compose-Umbau still falsch wird.
+
+Pfade, die sich damit nicht auflösen lassen, werden **abgelehnt** statt geraten — ein Backup, das ins Leere greift, muss beim Anlegen scheitern, nicht nachts um drei.
+
+Named Volumes (Staging, Logs) werden einfach unter demselben Namen in den Runner gehängt.
+
+### 6.5 Secrets in den Runner
+
+Umgebungsvariablen scheiden aus: Sie stehen in der Container-Konfiguration und sind für jeden mit Docker-Zugriff über `inspect` lesbar — dauerhaft, auch nach Laufende. Stattdessen:
+
+1. Pro Lauf ein **tmpfs-Mount** (`/run/secrets`, nur im RAM) im Runner.
+2. Das Backend schreibt die benötigten Werte beim Start hinein (Modus `0600`).
+3. Der Runner liest sie über Datei-Referenzen (`--password-file`, `AWS_SHARED_CREDENTIALS_FILE`, `PGPASSFILE`, SSH-Key-Datei) — restic, rclone und psql unterstützen das alle nativ.
+4. Mit dem Container verschwindet das tmpfs.
+
+Nie als CLI-Argument (in `ps` lesbar), nie in `docker inspect`, nie im Log.
+
+### 6.6 Runner-Images
+
+| Image | Inhalt | Verwendung |
+|---|---|---|
+| `simple-backup-runner` | restic, rsync, rclone, git, openssh-client, zstd, partclone | Standard für alle Datei- und Storage-Schritte |
+| `postgres:16\|17\|18-alpine` | pg_dump, pg_dumpall, pg_restore, psql | Postgres-Quellen, Version passend zum Server |
+
+Die Images sind über einen Tag gepinnt (nie `:latest`), werden beim Backend-Start auf Vorhandensein geprüft und bei Bedarf gezogen. Ein Homeserver ohne Internet muss trotzdem sichern können — deshalb Prüfung **vorab** und eine klare Fehlermeldung, kein Pull-Versuch mitten im Lauf.
+
+### 6.7 Abstraktion trotzdem
+
+`DockerJobExecutor` ist die einzige Produktiv-Implementierung, aber das `BackupExecutor`-Interface bleibt — mit einem `LocalProcessExecutor` für Unit-Tests und lokale Entwicklung ohne Docker-Daemon. Tests, die für jeden Fall einen Container hochziehen, sind zu langsam, um sie oft laufen zu lassen; Tests, die man nicht oft laufen lässt, findet niemand nützlich. Die Integrationstests nutzen dann Testcontainers gegen echtes Docker.
+
+### 6.8 Scheduling
 
 Kein Quartz. Stattdessen ein **Datenbank-Poller**: alle 30 s prüft ein `@Scheduled`-Task, welche Pläne fällig sind, und übernimmt sie mit
 
@@ -238,23 +322,21 @@ Das ist mehrinstanzen-sicher, überlebt Neustarts, braucht keine zusätzliche Bi
 
 Begrenzung der Nebenläufigkeit: global (`maxParallelRuns`, Default 2), pro Ziel (ein restic-Repository verträgt keine parallelen `prune`-Operationen) und pro Plan (nie zweimal gleichzeitig).
 
-### 6.2 Lauf-Lebenszyklus
+### 6.9 Lauf-Lebenszyklus
 
 ```
 QUEUED → RUNNING → ┬→ SUCCESS      (alle Schritte ok)
                    ├→ PARTIAL      (≥1 Ziel ok, ≥1 Ziel fehlgeschlagen)
                    ├→ FAILED       (Beschaffung fehlgeschlagen oder alle Ziele down)
-                   ├→ TIMEOUT      (Zeitlimit überschritten, Prozessgruppe beendet)
+                   ├→ TIMEOUT      (Zeitlimit überschritten, Container gekillt)
                    └→ CANCELLED    (Nutzerabbruch)
 ```
 
-- **Live-Logs:** stdout/stderr werden zeilenweise gelesen, in `logs/{runId}.log` geschrieben und per **SSE** an die UI gestreamt. Logs gehören nicht in die Datenbank — nur Pfad und Kurzfassung des Fehlers.
+- **Live-Logs:** Der Container-Log-Stream wird zeilenweise gelesen, nach `logs/{runId}.log` geschrieben und per **SSE** an die UI gestreamt. Logs gehören nicht in die Datenbank — nur Pfad und Kurzfassung des Fehlers.
 - **Fortschritt:** `restic --json` liefert strukturierten Fortschritt (Prozent, Bytes, ETA), `rsync --info=progress2` ebenfalls — beides wird geparst und als Fortschrittsbalken angezeigt.
-- **Abbruch:** `ProcessHandle.destroy()` auf die ganze Prozessgruppe, nach 10 s `destroyForcibly()`, danach Aufräumen von Staging und `restic unlock`.
-- **Wiederanlauf:** Beim Start werden Läufe, die in `RUNNING` hängen (Absturz), auf `FAILED` gesetzt und ihre Sperren gelöst.
+- **Abbruch:** `POST /containers/{id}/kill` (SIGTERM, nach 10 s SIGKILL), danach Aufräumen von Staging und `restic unlock`.
+- **Wiederanlauf nach Backend-Neustart:** Container mit `simple-backup.run-id`-Label suchen. Läuft er noch → wieder anhängen und weiterverfolgen. Ist er beendet → Exit-Code auswerten und den Lauf korrekt abschließen. Nur wirklich verwaiste Läufe werden auf `FAILED` gesetzt.
 - **Retry:** exponentieller Backoff, konfigurierbar (Default 2 Versuche), nur bei als transient klassifizierten Fehlern (Netz, Timeout) — nicht bei Exit-Codes, die auf Fehlkonfiguration deuten.
-
----
 
 ## 7. Aufbewahrung, Prüfung, Wiederherstellung
 
@@ -319,15 +401,15 @@ Zu schützen: GitHub-PATs, S3-Keys, SSH-Keys, DB-Passwörter, restic-Repository-
 - **Logs:** Ein zentraler Redaktor filtert bekannte Secret-Werte und typische Muster (`ghp_…`, `AKIA…`) aus allen Logzeilen und gespeicherten Kommandos, bevor sie geschrieben werden.
 - **Backup des Tools selbst:** Ohne Masterkey ist die eigene Datenbank wertlos. Ein geführter „Konfiguration exportieren"-Ablauf (passwortgeschütztes Archiv) gehört ins v1 — sonst ist der erste echte Ernstfall zugleich der letzte.
 
-### 9.2 Authentifizierung `[E-3]`
-- **Empfehlung v1:** Spring Security mit **Session-Cookie** (`HttpOnly`, `Secure`, `SameSite=Lax`) statt JWT im LocalStorage. Weniger Code, kein XSS-Token-Diebstahl, sofortiger Logout möglich. JWT löst hier ein Problem, das niemand hat.
+### 9.2 Authentifizierung *(E-3 entschieden)*
+- **Entschieden:** Spring Security mit **Session-Cookie** (`HttpOnly`, `Secure`, `SameSite=Lax`) statt JWT im LocalStorage. Weniger Code, kein XSS-Token-Diebstahl, sofortiger Logout möglich. JWT löst hier ein Problem, das niemand hat.
 - Passwort-Hash Argon2id, Brute-Force-Bremse, Pflicht-Passwortwechsel beim ersten Login.
 - TOTP-2FA als kleines, lohnendes Extra.
 - **Später:** OIDC (Authelia/Keycloak/Authentik) — im Homelab-Umfeld häufig vorhanden.
 - Rollen v1: `ADMIN` (alles) und `VIEWER` (nur lesen). Mehr erst, wenn jemand mehr braucht.
 
 ### 9.3 Härtung
-- Container läuft als Nicht-Root; Root nur, wo Blockdevice-Zugriff es zwingend verlangt (dann sauber begrenzt über `devices:`, nie `privileged`).
+- Backend- und Runner-Container laufen als Nicht-Root. Blockdevice-Zugriff wird pro Lauf über `Devices` im Create-Request gewährt und vom Socket-Proxy gegen eine Allowlist geprüft — nie `privileged`.
 - Quell-Mounts read-only (`:ro`) — das Tool hat auf den Quelldaten nichts zu schreiben.
 - Audit-Log für jede verändernde Aktion (wer, was, wann, von wo).
 - Keine Ausgabe nach außen ohne Kontext: Fehlermeldungen an die UI sind bereinigt, Details stehen im Log.
@@ -361,7 +443,7 @@ Virtuelle Threads passen hier ausgesprochen gut: Ein Backup-Lauf ist zu 99 % War
 | Tests | Vitest + Playwright | |
 
 ### Build & CI
-- **Gradle (Kotlin DSL)** für das Backend `[E-5]`, Angular-Build als eigener Schritt, im Release-Image zusammengefügt.
+- **Gradle (Kotlin DSL)** für das Backend, Angular-Build als eigener Schritt, im Release-Image zusammengefügt.
 - GitHub Actions: Build → Test → Lint → Container-Scan (Trivy) → Multi-Arch-Image (amd64 **und arm64**, falls das Ziel ein Raspberry Pi oder eine ARM-NAS ist) nach GHCR.
 - Conventional Commits + automatisches Changelog.
 
@@ -377,29 +459,46 @@ services:
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U backup"] }
     volumes: [ "dbdata:/var/lib/postgresql/data" ]
 
+  # Gefilterter Zugang zur Docker-API. Nur dieser Container sieht den Socket.
+  dockerproxy:
+    image: tecnativa/docker-socket-proxy
+    environment:
+      CONTAINERS: 1
+      POST: 1
+      IMAGES: 1
+      EXEC: 0          # kein docker exec
+      VOLUMES: 0
+      NETWORKS: 0
+      BUILD: 0
+    volumes: [ "/var/run/docker.sock:/var/run/docker.sock:ro" ]
+    networks: [ internal ]          # nicht nach außen erreichbar
+
   backend:
     image: ghcr.io/remoraschle/simple-backup:latest
     depends_on: { db: { condition: service_healthy } }
     environment:
+      DOCKER_HOST: tcp://dockerproxy:2375
       SIMPLEBACKUP_MASTER_KEY_FILE: /run/secrets/master_key
     secrets: [ master_key ]
     volumes:
       - "staging:/var/lib/simple-backup/staging"
       - "logs:/var/lib/simple-backup/logs"
-      - "/mnt/nas:/mnt/nas"            # NAS-Share, auf dem Host gemountet
+      - "/mnt/nas:/mnt/nas"               # NAS-Share, auf dem Host gemountet
       - "/srv/photos:/sources/photos:ro"  # Quelle read-only
-    # devices: [ "/dev/sdb:/dev/sdb" ]  # nur bei Blockdevice-Backups
+    networks: [ internal, default ]
 
   web:
     image: ghcr.io/remoraschle/simple-backup-web:latest   # nginx + SPA
     ports: [ "8080:80" ]
 ```
 
+Die Bind-Mounts am **Backend** sind bewusst auch dann nötig, wenn das Backend die Daten selbst nie liest: Sie sind die Quelle der Wahrheit für die Host-Pfad-Übersetzung aus [§6.4](#64-mounts-woher-weiß-das-backend-die-host-pfade). Was das Backend nicht gemountet hat, kann kein Runner sichern — eine Regel, die sich gut erklären lässt und Fehlkonfiguration früh sichtbar macht.
+
+`dockerproxy` liegt in einem internen Netz ohne Port-Veröffentlichung. Erreichte ihn jemand von außen, wäre die Filterung wertlos.
+
 Dazu eine `compose.dev.yaml` mit Postgres, MinIO (S3-Ziel zum Testen), einem SFTP-Container und Mailpit (SMTP-Attrappe) — damit ist die komplette Matrix lokal testbar, ohne echte Zugangsdaten.
 
-TLS und Zugang von außen übernimmt ein vorgelagerter Reverse Proxy (Traefik/Caddy/NPM) — das Tool bringt kein eigenes ACME mit. `[E-5]`
-
----
+TLS und Zugang von außen übernimmt ein vorgelagerter Reverse Proxy (Traefik/Caddy/NPM) — das Tool bringt kein eigenes ACME mit.
 
 ## 12. Projektstruktur
 
@@ -428,27 +527,36 @@ simple-backup/
 
 | Meilenstein | Inhalt | Ergebnis |
 |---|---|---|
-| **M0 — Gerüst** | Repo, Gradle/Angular-Skelett, Compose, CI, Flyway, Auth, Health | Es läuft, es ist leer |
-| **M1 — Erstes echtes Backup** | Quelle „lokaler Pfad", Ziel „lokal + S3", restic-Engine, Scheduler, Lauf-Historie, Dashboard | Ordner → S3, geplant, sichtbar |
-| **M2 — Vertrauen** | Benachrichtigungen (SMTP + Webhook + ntfy), Retention/GFS, Dead-Man-Switch, Live-Logs | Man erfährt, wenn es kaputt ist |
-| **M3 — Wiederherstellung** | Snapshot-Browser, Restore, Datei-Download, `restic check`, Restore-Test | Backups sind nachweislich gut |
-| **M4 — Postgres & GitHub** | pg_dump-Pipeline, Globals, Dump-Verifikation, GitHub-Discovery + Mirror + Metadaten | Die beiden wertvollsten Quellen |
-| **M5 — S3, SFTP, NAS, rsync-Modus** | rclone-Adapter, Hostkey-Handling, Mirror-Modus | Quellmatrix vollständig |
-| **M6 — Kür** | Blockdevices, Prometheus, OIDC, Multi-Version-Runner, Konfig-Export/Import | Betriebsreif |
+| **M0 — Gerüst** | Repo, Gradle/Angular-Skelett, Compose inkl. Socket-Proxy, CI, Flyway, Auth, Health | Es läuft, es ist leer |
+| **M1 — Runner-Fundament** | `BackupExecutor`, `DockerJobExecutor`, Host-Pfad-Übersetzung, Secret-tmpfs, Label-Reaper, Wiederanhängen nach Neustart, Runner-Image | Ein Container wird gestartet, überwacht, ausgewertet |
+| **M2 — Erstes echtes Backup** | Quelle „lokaler Pfad/NAS", Ziel „lokal + S3", restic-Engine, Scheduler, Lauf-Historie, Dashboard, Live-Logs | Ordner → S3, geplant, sichtbar |
+| **M3 — Vertrauen** | Benachrichtigungen (SMTP + Webhook + ntfy), Retention/GFS, Dead-Man-Switch | Man erfährt, wenn es kaputt ist |
+| **M4 — Wiederherstellung** | Snapshot-Browser, Restore, Datei-Download, `restic check`, automatischer Restore-Test | Backups sind nachweislich gut |
+| **M5 — Postgres & GitHub** | pg_dump-Pipeline mit versionspassendem Runner, Globals, Dump-Verifikation, GitHub-Discovery + Mirror + Metadaten | Die beiden wertvollsten Quellen |
+| **M6 — S3, SFTP, rsync-Mirror** | rclone-Adapter, Hostkey-Handling, Mirror-Modus | Quellmatrix im Wesentlichen vollständig |
+| **M7 — Kür** | Blockdevices, Prometheus, OIDC, Konfig-Export/Import, rootless Docker | Betriebsreif |
 
-M1–M3 zuerst und in dieser Reihenfolge ist Absicht: Lieber **eine** Quelle, die zuverlässig sichert, überwacht *und* nachweislich wiederherstellbar ist, als sechs Quellen, bei denen niemand weiß, ob ein Restore je funktioniert hat.
+M1 ist wegen der Sidecar-Entscheidung ein eigener Meilenstein und kein Nebenprodukt: Host-Pfad-Übersetzung, Wiederanhängen nach Neustart und das Aufräumen verwaister Container sind die Stellen, an denen dieses Modell scheitert, wenn man sie nebenbei erledigt. Einmal sauber gebaut, ist danach jede weitere Quelle nur noch eine Argumentliste.
 
----
+M2–M4 zuerst und in dieser Reihenfolge ist ebenfalls Absicht: Lieber **eine** Quelle, die zuverlässig sichert, überwacht *und* nachweislich wiederherstellbar ist, als sechs Quellen, bei denen niemand weiß, ob ein Restore je funktioniert hat.
 
-## 14. Offene Entscheidungen
+## 14. Entscheidungen
+
+### Getroffen
+
+| # | Frage | Entscheidung | Begründung |
+|---|---|---|---|
+| **E-1** | Storage-Engine | **restic als Default, rsync als Mirror-Modus** | restic spricht S3 nativ und braucht keine Software am Ziel; rsync deckt die direkt lesbare 1:1-Kopie ab ([ADR-0001](adr/0001-storage-engine-restic.md)) |
+| **E-2** | Ausführungsmodell | **Docker-Sidecar-Runner ab v1** | Versionspassendes `pg_dump`, Ressourcengrenzen pro Lauf, Backup überlebt Backend-Neustart; Socket-Risiko per Proxy eingegrenzt ([ADR-0002](adr/0002-sidecar-runner.md)) |
+| **E-3** | Nutzer & Auth | **Single-Admin + VIEWER, Session-Cookie** | Weniger Code und kein XSS-Token-Diebstahl gegenüber JWT; OIDC bleibt nachrüstbar ([ADR-0003](adr/0003-auth-session-cookie.md)) |
+| **E-4** | Erste Quelle | **Lokale Ordner / NAS** | Keine externen Zugangsdaten, damit steht die Maschinerie bevor die kniffligen Adapter kommen ([ADR-0004](adr/0004-erste-quelle-lokale-pfade.md)) |
+
+### Offen
 
 | # | Frage | Optionen | Empfehlung |
 |---|---|---|---|
-| **E-1** | Storage-Engine | restic / borg / nur rsync / restic+rsync | **restic als Default, rsync als Mirror-Modus** |
-| **E-2** | Ausführungsmodell | Fat Image / Docker-Sidecar-Runner / K8s Jobs | **Fat Image hinter `BackupExecutor`-Interface** |
-| **E-3** | Nutzer & Auth | Single-User / Multi-User+Rollen / OIDC ab v1 | **Single-Admin + VIEWER, Session-Cookie; OIDC später** |
-| **E-4** | Umfang v1 | Nur Dateien+DB / plus GitHub-Metadaten / plus Pre-/Post-Hooks | GitHub-Metadaten ja, Hooks erst nach Sicherheitskonzept |
-| **E-5** | Werkzeugwahl | Gradle vs. Maven · Angular 22 vs. 21 LTS · Material vs. PrimeNG | **Gradle · Angular 22 · PrimeNG** (mehr fertige Tabellen/Trees) |
+| **E-5** | Werkzeugwahl | Angular 22 vs. 21 LTS · Material vs. PrimeNG | **Angular 22 · PrimeNG** — deutlich mehr fertige Tabellen/Trees, und ein Snapshot-Browser ist genau ein Tree. Gradle Kotlin DSL setze ich ohne Rückfrage, falls kein Einwand |
+| **E-6** | Docker-Betriebsmodus | rootful vs. rootless Docker/Podman | **rootless**, wo dein Host es hergibt — begrenzt die Eskalation aus §6.2. Betrifft nur das Deployment, nicht den Code |
 
 ---
 
@@ -456,10 +564,14 @@ M1–M3 zuerst und in dieser Reihenfolge ist Absicht: Lieber **eine** Quelle, di
 
 | Risiko | Gegenmaßnahme |
 |---|---|
+| Docker-API-Zugriff als Host-Übernahme-Pfad | Socket-Proxy mit Allowlist statt Socket-Mount, Create-Request-Filter (`Privileged`, `CapAdd`, Mount-Allowlist) im Proxy, internes Netz, rootless empfohlen |
+| Verwaiste Runner-Container nach Backend-Absturz | Label-basierter Reaper beim Start, Wiederanhängen an noch laufende Container, Timeout je Schritt |
+| Host-Pfad-Übersetzung greift ins Leere | Ableitung aus der eigenen Mount-Tabelle statt aus Konfiguration; nicht auflösbare Pfade werden beim Anlegen abgelehnt, nicht zur Laufzeit |
 | Das Tool löscht durch fehlerhafte Retention gute Backups | Dry-Run mit Bestätigung, Prune getrennt vom Backup, `PINNED`-Snapshots, „würde alles löschen"-Alarm |
 | Masterkey verloren → alle Zugangsdaten weg | Geführter Konfig-Export, Key im Passwortmanager, im Runbook dokumentiert |
 | Backups laufen jahrelang und sind nicht wiederherstellbar | Automatische Restore-Tests als Pflichtfeature, nicht als Option |
 | Ausfall bleibt unbemerkt | Dead-Man-Switch intern **und** extern |
-| Command-Injection über Konfigurationsfelder | `ProcessBuilder` mit Argumentliste, keine Shell, Eingabe-Allowlist |
-| `pg_dump`-Versionskonflikt | Mehrere Client-Versionen im Image, Versionsprüfung beim Verbindungstest |
+| Command-Injection über Konfigurationsfelder | Argumentlisten statt Shell, Eingabe-Allowlist, Validierung zusätzlich im Proxy |
+| `pg_dump`-Versionskonflikt | Runner-Image passend zur Server-Major-Version, Versionsprüfung beim Verbindungstest |
+| Runner-Image fehlt bei Internet-Ausfall | Vorabprüfung beim Backend-Start, gepinnte Tags, klare Fehlermeldung statt Pull mitten im Lauf |
 | Volllaufendes Staging-Volume | Vorab-Größenschätzung, Speicherplatzprüfung vor dem Lauf, Streaming statt Staging wo möglich |

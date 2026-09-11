@@ -10,7 +10,16 @@ Es orchestriert erprobte Linux-Werkzeuge (`restic`, `rsync`, `rclone`, `pg_dump`
 
 Konzeptphase. Es gibt noch keinen Code.
 
-👉 **[docs/konzept.md](docs/konzept.md)** — Architektur, Domänenmodell, Adapter, Sicherheit, Stack, Roadmap und die offenen Entscheidungen.
+👉 **[docs/konzept.md](docs/konzept.md)** — Architektur, Domänenmodell, Adapter, Sicherheit, Stack, Roadmap.
+
+## Architekturentscheidungen
+
+| ADR | Entscheidung |
+|---|---|
+| [0001](docs/adr/0001-storage-engine-restic.md) | restic als Storage-Engine, rsync als Mirror-Modus |
+| [0002](docs/adr/0002-sidecar-runner.md) | Backup-Schritte laufen in Sidecar-Containern |
+| [0003](docs/adr/0003-auth-session-cookie.md) | Session-Cookie-Authentifizierung, ein Admin-Konto |
+| [0004](docs/adr/0004-erste-quelle-lokale-pfade.md) | Lokale Ordner und NAS-Shares als erste Quelle |
 
 ## Stack (geplant)
 
