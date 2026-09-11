@@ -29,7 +29,8 @@ public record ExecutionResult(
         return status.isSuccess();
     }
 
-    static ExecutionResult of(String executionId, int exitCode, Instant startedAt, String lastError) {
+    /** Fuer Implementierungen von {@link BackupExecutor}. */
+    public static ExecutionResult of(String executionId, int exitCode, Instant startedAt, String lastError) {
         return new ExecutionResult(
                 executionId,
                 exitCode == 0 ? ExecutionStatus.SUCCESS : ExecutionStatus.FAILED,
@@ -39,7 +40,8 @@ public record ExecutionResult(
                 exitCode == 0 ? null : lastError);
     }
 
-    static ExecutionResult terminated(String executionId, ExecutionStatus status, Instant startedAt,
+    /** Fuer Implementierungen von {@link BackupExecutor}: Ende ohne regulaeren Rueckgabewert. */
+    public static ExecutionResult terminated(String executionId, ExecutionStatus status, Instant startedAt,
             String message) {
         return new ExecutionResult(executionId, status, null, startedAt, Instant.now(), message);
     }

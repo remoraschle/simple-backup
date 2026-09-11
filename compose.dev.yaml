@@ -1,7 +1,7 @@
 # Entwicklungsumgebung.
 #
 #   docker compose -f compose.dev.yaml up -d
-#   cd backend  && ./mvnw spring-boot:run
+#   cd backend  && DOCKER_HOST=tcp://localhost:2375 ./mvnw spring-boot:run
 #   cd frontend && npm start
 #
 # Bringt alles mit, was fuer einen vollstaendigen Durchlauf einschliesslich Restore noetig
@@ -22,6 +22,29 @@ services:
       test: ["CMD-SHELL", "pg_isready -U simplebackup"]
       interval: 5s
       retries: 10
+
+  # Gefilterter Zugang zur Docker-API, wie im Betrieb.
+  #
+  # Auch in der Entwicklung bewusst mit Proxy: Das Backend soll den Socket nie unmittelbar
+  # erreichen, damit der Code diesen Weg gar nicht erst kennt. Fuer Arbeit ganz ohne Docker
+  # gibt es SIMPLEBACKUP_EXECUTOR=local.
+  dockerproxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:0.3.0
+    environment:
+      CONTAINERS: 1
+      IMAGES: 1
+      INFO: 1
+      POST: 1
+      EXEC: 0
+      VOLUMES: 0
+      NETWORKS: 0
+      BUILD: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      # Nur in der Entwicklung veroeffentlicht, damit das Backend ausserhalb von Compose
+      # darauf zugreifen kann. Im Betrieb hat der Proxy keinen veroeffentlichten Port.
+      - "127.0.0.1:2375:2375"
 
   # S3-Ziel zum Testen. Konsole unter http://localhost:9001
   minio:

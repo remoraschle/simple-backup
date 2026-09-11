@@ -69,6 +69,24 @@ simplebackup:
     # Nach so vielen Fehlversuchen wird das Konto zeitweise gesperrt.
     max-failed-logins: 5
     lockout-duration: 15m
+  engine:
+    # "docker" fuehrt jeden Schritt in einem eigenen Container aus (Betrieb),
+    # "local" als Kindprozess des Backends (nur Entwicklung, ohne Isolierung).
+    executor: ${SIMPLEBACKUP_EXECUTOR:docker}
+
+  docker:
+    # Zeigt auf den Socket-Proxy, niemals unmittelbar auf /var/run/docker.sock.
+    host: ${DOCKER_HOST:tcp://dockerproxy:2375}
+    api-version: v1.51
+    connect-timeout: 5s
+    request-timeout: 30s
+    runner-image: ${SIMPLEBACKUP_RUNNER_IMAGE:ghcr.io/remoraschle/simple-backup-runner:latest}
+    # UID:GID im Runner. Konfigurierbar, weil rootless Docker die Kennungen abbildet
+    # und eine feste Annahme dort zu Rechtefehlern fuehren wuerde.
+    runner-user: ${SIMPLEBACKUP_RUNNER_USER:1000:1000}
+    # Nur noetig, wenn in der Compose-Datei ein eigener hostname gesetzt wurde.
+    self-container-id: ${SIMPLEBACKUP_SELF_CONTAINER_ID:}
+
   secrets:
     # Genau eine der beiden Quellen muss gesetzt sein. Die Datei-Variante ist
     # fuer Docker Secrets gedacht und der Umgebungsvariablen vorzuziehen.

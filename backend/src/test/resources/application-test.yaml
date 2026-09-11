@@ -4,6 +4,17 @@ spring:
       ddl-auto: validate
 
 simplebackup:
+  engine:
+    # Tests, die fuer jeden Fall einen Container hochziehen, laufen zu langsam, um sie oft
+    # auszufuehren -- und Tests, die man selten ausfuehrt, findet niemand nuetzlich.
+    executor: local
+
+  docker:
+    # Zeigt bewusst ins Leere: Kein Test darf einen echten Daemon brauchen.
+    host: http://127.0.0.1:1
+    connect-timeout: 200ms
+    request-timeout: 500ms
+
   secrets:
     # Fester Testschluessel, damit Tests reproduzierbar sind. Niemals ausserhalb von Tests.
     master-key: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
