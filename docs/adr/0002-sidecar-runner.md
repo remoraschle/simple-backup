@@ -28,7 +28,9 @@ Der Docker-Socket wird **nie** direkt ins Backend gemountet. Dazwischen liegt ei
 ## Konsequenzen
 
 - **Host-Pfad-Übersetzung ist Pflicht.** Der Docker-Daemon löst Bind-Mounts gegen das Host-Dateisystem auf; das Backend kennt nur seine eigenen Container-Pfade. Gelöst über Selbst-Inspektion der eigenen Mount-Tabelle (`GET /containers/{self}/json`). Nicht auflösbare Pfade werden beim Anlegen abgelehnt.
-- **Secrets dürfen nicht als Environment übergeben werden** — sie wären dauerhaft über `docker inspect` lesbar. Stattdessen ein tmpfs-Mount pro Lauf und Datei-Referenzen (`--password-file`, `PGPASSFILE`, `AWS_SHARED_CREDENTIALS_FILE`).
+- **Secrets dürfen nicht als Environment übergeben werden** — sie wären dauerhaft über `docker inspect` lesbar. Stattdessen werden sie über `PUT /containers/{id}/archive` als Dateien mit Modus `0600` in den erstellten, noch nicht gestarteten Container gelegt und über Datei-Referenzen gelesen (`--password-file`, `PGPASSFILE`, `AWS_SHARED_CREDENTIALS_FILE`).
+
+  *Nachtrag nach der Umsetzung:* Ursprünglich war dafür ein `tmpfs` vorgesehen, damit die Werte nur im RAM liegen. Die Docker-API gibt das nicht her — ein `tmpfs` wird erst beim Start gemountet und überdeckt vorher kopierte Dateien, und nach dem Start zu kopieren kommt zu spät, weil das Kommando dann schon läuft. Ein wartendes Entrypoint-Skript würde nur im eigenen Runner-Image greifen, nicht in `postgres:N-alpine`. Der wesentliche Gewinn gegenüber Umgebungsvariablen bleibt bestehen; die Werte berühren dafür kurzzeitig die Schreibschicht des Containers, die mit `docker rm` verschwindet.
 - **`AutoRemove` bleibt aus**, sonst gehen Exit-Code und Logs verloren. Explizites Entfernen nach Auswertung, plus Label-Reaper beim Start.
 - Ein zusätzlicher Meilenstein (M1) vor dem ersten echten Backup.
 - Die Entwicklungsumgebung braucht einen Docker-Daemon. Der `LocalProcessExecutor` hält schnelle Tests ohne ihn möglich.

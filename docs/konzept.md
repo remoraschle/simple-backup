@@ -302,14 +302,25 @@ Named Volumes (Staging, Logs) werden einfach unter demselben Namen in den Runner
 
 ### 6.5 Secrets in den Runner
 
-Umgebungsvariablen scheiden aus: Sie stehen in der Container-Konfiguration und sind für jeden mit Docker-Zugriff über `inspect` lesbar — dauerhaft, auch nach Laufende. Stattdessen:
+Umgebungsvariablen scheiden aus: Sie stehen in der Container-Konfiguration und sind über
+`docker inspect` lesbar, solange der Container existiert. Kommandozeilen-Argumente ebenso —
+die sieht jeder in `ps`.
 
-1. Pro Lauf ein **tmpfs-Mount** (`/run/secrets`, nur im RAM) im Runner.
-2. Das Backend schreibt die benötigten Werte beim Start hinein (Modus `0600`).
-3. Der Runner liest sie über Datei-Referenzen (`--password-file`, `AWS_SHARED_CREDENTIALS_FILE`, `PGPASSFILE`, SSH-Key-Datei) — restic, rclone und psql unterstützen das alle nativ.
-4. Mit dem Container verschwindet das tmpfs.
+Stattdessen werden die Werte über `PUT /containers/{id}/archive` als Dateien mit Modus `0600`
+nach `/run/secrets` gelegt, **bevor** der Container startet. Der Runner liest sie über
+Datei-Referenzen (`--password-file`, `AWS_SHARED_CREDENTIALS_FILE`, `PGPASSFILE`, SSH-Key-Datei)
+— restic, rclone und psql unterstützen das alle nativ. Mit `docker rm`, das nach jeder
+Auswertung läuft, verschwindet die Schreibschicht und mit ihr die Datei.
 
-Nie als CLI-Argument (in `ps` lesbar), nie in `docker inspect`, nie im Log.
+> **Abweichung vom ursprünglichen Entwurf.** Geplant war ein `tmpfs`, damit die Werte nur im
+> RAM stehen. Das lässt sich mit der Docker-API nicht sauber verbinden: Ein `tmpfs` wird erst
+> beim Start gemountet und überdeckt alles, was vorher hineinkopiert wurde; kopiert man erst
+> nach dem Start, läuft das Kommando bereits. Ein Umweg über ein wartendes Entrypoint-Skript
+> würde nur für das eigene Runner-Image funktionieren, nicht für `postgres:N-alpine`.
+>
+> Der entscheidende Gewinn bleibt: Die Werte stehen **nicht** in `docker inspect`, **nicht**
+> in `ps` und **nicht** in der Container-Konfiguration. Der Preis ist, dass sie kurzzeitig die
+> Schreibschicht des Containers berühren statt ausschließlich den Arbeitsspeicher.
 
 ### 6.6 Runner-Images
 

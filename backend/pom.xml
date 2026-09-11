@@ -23,6 +23,7 @@
         <spring-modulith.version>2.1.1</spring-modulith.version>
         <springdoc.version>3.1.1</springdoc.version>
         <bouncycastle.version>1.86</bouncycastle.version>
+        <commons-compress.version>1.28.0</commons-compress.version>
     </properties>
 
     <dependencyManagement>
@@ -93,6 +94,15 @@
         <dependency>
             <groupId>org.springframework.modulith</groupId>
             <artifactId>spring-modulith-starter-core</artifactId>
+        </dependency>
+
+        <!-- Uebertragung von Dateien in einen Container verlangt einen TAR-Strom.
+             Eine erprobte Umsetzung ist einer selbstgeschriebenen vorzuziehen: TAR hat
+             Fallstricke bei langen Namen, Rechten und Pruefsummen. -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>${commons-compress.version}</version>
         </dependency>
 
         <!-- Betrieb -->
