@@ -1,0 +1,15 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+simplebackup:
+  secrets:
+    # Fester Testschluessel, damit Tests reproduzierbar sind. Niemals ausserhalb von Tests.
+    master-key: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+    key-version: 1
+
+logging:
+  level:
+    org.testcontainers: WARN
+    com.github.dockerjava: WARN

@@ -1,0 +1,81 @@
+spring:
+  application:
+    name: simple-backup
+
+  datasource:
+    url: ${SIMPLEBACKUP_DB_URL:jdbc:postgresql://localhost:5432/simplebackup}
+    username: ${SIMPLEBACKUP_DB_USER:simplebackup}
+    password: ${SIMPLEBACKUP_DB_PASSWORD:simplebackup}
+    hikari:
+      pool-name: simple-backup-pool
+      maximum-pool-size: 10
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  session:
+    jdbc:
+      # Das Session-Schema kommt als Flyway-Migration, nicht ueber diesen Initialisierer.
+      initialize-schema: never
+    timeout: 12h
+
+  threads:
+    virtual:
+      # Ein Backup-Lauf wartet fast ausschliesslich auf einen Kindprozess.
+      # Ein virtueller Thread pro Lauf ist damit das einfachste und billigste Modell.
+      enabled: true
+
+server:
+  port: 8081
+  servlet:
+    session:
+      cookie:
+        name: SIMPLEBACKUP_SESSION
+        http-only: true
+        same-site: lax
+        # In Produktion hinter TLS auf true; lokal ueber HTTP sonst kein Cookie.
+        secure: ${SIMPLEBACKUP_COOKIE_SECURE:false}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: simple-backup
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+simplebackup:
+  security:
+    # Nach so vielen Fehlversuchen wird das Konto zeitweise gesperrt.
+    max-failed-logins: 5
+    lockout-duration: 15m
+  secrets:
+    # Genau eine der beiden Quellen muss gesetzt sein. Die Datei-Variante ist
+    # fuer Docker Secrets gedacht und der Umgebungsvariablen vorzuziehen.
+    master-key: ${SIMPLEBACKUP_MASTER_KEY:}
+    master-key-file: ${SIMPLEBACKUP_MASTER_KEY_FILE:}
+    key-version: 1
+
+logging:
+  level:
+    dev.remo.simplebackup: INFO

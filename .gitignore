@@ -1,0 +1,26 @@
+# Build
+target/
+dist/
+*.class
+
+# Node
+node_modules/
+.angular/
+npm-debug.log*
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Umgebung -- enthaelt den Masterkey, darf niemals ins Repository
+.env
+*.local.env
+secrets/
+
+# Logs und Laufzeitdaten
+*.log
+/data/
