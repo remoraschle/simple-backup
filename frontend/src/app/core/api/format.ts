@@ -34,6 +34,16 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 
+/**
+ * Eine Anzahl mit passendem Zaehlwort.
+ *
+ * <p>Ohne das steht in der Oberfläche „1 Pläne“ und „vor 1 Minuten“ — und genau die Eins ist
+ * der häufigste Fall, weil meist ein einzelner Plan gerade gelaufen ist.
+ */
+export function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
 /** Ein Zeitpunkt als Abstand zu jetzt — für eine Übersicht aussagekräftiger als ein Datum. */
 export function formatRelative(isoDate: string | null | undefined): string {
   if (!isoDate) {
@@ -45,9 +55,9 @@ export function formatRelative(isoDate: string | null | undefined): string {
 
   const describe = (): string => {
     if (absolute < 60) return 'wenigen Sekunden';
-    if (absolute < 3600) return `${Math.round(absolute / 60)} Minuten`;
-    if (absolute < 86400) return `${Math.round(absolute / 3600)} Stunden`;
-    return `${Math.round(absolute / 86400)} Tagen`;
+    if (absolute < 3600) return plural(Math.round(absolute / 60), 'Minute', 'Minuten');
+    if (absolute < 86400) return plural(Math.round(absolute / 3600), 'Stunde', 'Stunden');
+    return plural(Math.round(absolute / 86400), 'Tag', 'Tagen');
   };
 
   return future ? `in ${describe()}` : `vor ${describe()}`;

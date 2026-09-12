@@ -445,6 +445,9 @@ Zu schützen: GitHub-PATs, S3-Keys, SSH-Keys, DB-Passwörter, restic-Repository-
 ### 9.2 Authentifizierung *(E-3 entschieden)*
 - **Entschieden:** Spring Security mit **Session-Cookie** (`HttpOnly`, `Secure`, `SameSite=Lax`) statt JWT im LocalStorage. Weniger Code, kein XSS-Token-Diebstahl, sofortiger Logout möglich. JWT löst hier ein Problem, das niemand hat.
 - Passwort-Hash Argon2id, Brute-Force-Bremse, Pflicht-Passwortwechsel beim ersten Login.
+  Der Zwang wird **im Backend** durchgesetzt, nicht in der Oberfläche: Solange das Erstpasswort gilt,
+  beantwortet die API nur Sitzungsabfrage, Passwortwechsel und Abmelden — sonst reichte das einmalig
+  protokollierte Startpasswort für einen `curl`-Aufruf an der Oberfläche vorbei.
 - TOTP-2FA als kleines, lohnendes Extra.
 - **Später:** OIDC (Authelia/Keycloak/Authentik) — im Homelab-Umfeld häufig vorhanden.
 - Rollen v1: `ADMIN` (alles) und `VIEWER` (nur lesen). Mehr erst, wenn jemand mehr braucht.
@@ -454,6 +457,9 @@ Zu schützen: GitHub-PATs, S3-Keys, SSH-Keys, DB-Passwörter, restic-Repository-
 - Quell-Mounts read-only (`:ro`) — das Tool hat auf den Quelldaten nichts zu schreiben.
 - Audit-Log für jede verändernde Aktion (wer, was, wann, von wo).
 - Keine Ausgabe nach außen ohne Kontext: Fehlermeldungen an die UI sind bereinigt, Details stehen im Log.
+- Die Oberfläche lädt nichts aus dem Internet nach. Schriften und Symbole liegen im eigenen Bundle;
+  ein Werkzeug, das im abgeschotteten Netz laufen soll, darf nicht von einem CDN abhängen — und die
+  Browser der Benutzer haben dabei auch nichts bei Dritten zu melden.
 
 ---
 

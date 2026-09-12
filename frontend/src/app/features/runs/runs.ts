@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -34,7 +34,12 @@ export class Runs {
   protected readonly runs = signal<Run[]>([]);
   protected readonly loading = signal(true);
   protected readonly planId = signal<string | undefined>(undefined);
-  protected readonly columns = ['status', 'started', 'duration', 'transferred', 'files', 'actions'];
+  // Ist bereits auf einen Plan gefiltert, waere die Plan-Spalte in jeder Zeile dieselbe.
+  protected readonly columns = computed(() =>
+    this.planId()
+      ? ['status', 'started', 'duration', 'transferred', 'files', 'actions']
+      : ['status', 'plan', 'started', 'duration', 'transferred', 'files', 'actions'],
+  );
 
   protected readonly bytes = formatBytes;
   protected readonly duration = formatDuration;

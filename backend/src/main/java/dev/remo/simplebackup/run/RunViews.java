@@ -13,6 +13,8 @@ public final class RunViews {
     public record RunSummary(
             UUID id,
             UUID planId,
+            // Der Name des Plans, damit eine Liste von Laeufen ohne zweite Abfrage lesbar ist.
+            String planName,
             RunStatus status,
             RunTrigger trigger,
             Instant queuedAt,
@@ -25,8 +27,8 @@ public final class RunViews {
             Long filesChanged,
             String errorSummary) {
 
-        static RunSummary of(BackupRun run) {
-            return new RunSummary(run.getId(), run.getPlanId(), run.getStatus(), run.getTriggerType(),
+        static RunSummary of(BackupRun run, String planName) {
+            return new RunSummary(run.getId(), run.getPlanId(), planName, run.getStatus(), run.getTriggerType(),
                     run.getQueuedAt(), run.getStartedAt(), run.getFinishedAt(),
                     run.getStartedAt() == null ? null : run.getDuration().toSeconds(),
                     run.getBytesProcessed(), run.getBytesTransferred(), run.getFilesNew(),
@@ -36,8 +38,9 @@ public final class RunViews {
 
     public record RunDetail(RunSummary summary, List<StepView> steps) {
 
-        static RunDetail of(BackupRun run) {
-            return new RunDetail(RunSummary.of(run), run.getSteps().stream().map(StepView::of).toList());
+        static RunDetail of(BackupRun run, String planName) {
+            return new RunDetail(RunSummary.of(run, planName),
+                    run.getSteps().stream().map(StepView::of).toList());
         }
     }
 

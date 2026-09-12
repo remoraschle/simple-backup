@@ -1,6 +1,7 @@
 package dev.remo.simplebackup.catalog;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,6 +9,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 interface PlanRepository extends JpaRepository<BackupPlan, UUID> {
+
+    /** Nur Kennung und Name -- damit Listen einen Plan benennen koennen, ohne ihn zu laden. */
+    interface PlanName {
+        UUID getId();
+
+        String getName();
+    }
+
+    List<PlanName> findByIdIn(Collection<UUID> ids);
 
     boolean existsByName(String name);
 

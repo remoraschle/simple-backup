@@ -1,4 +1,4 @@
-<sb-page-header title="Lauf">
+<sb-page-header title="Lauf" [subtitle]="detail()?.summary?.planName ?? ''">
   <div class="flex gap-2">
     <a matButton routerLink="/laeufe">
       <mat-icon>arrow_back</mat-icon>
@@ -71,8 +71,10 @@
             <span class="text-sm text-on-surface-variant"> Rückgabewert {{ step.exitCode }} </span>
           }
           @if (step.command.length) {
+            <!-- min-w-0: Ein Flex-Element schrumpft sonst nicht unter seinen Inhalt, und die
+                 Kuerzung griffe nicht -- das lange restic-Kommando stuende ueber den Rand hinaus. -->
             <code
-              class="w-full truncate text-xs text-on-surface-variant"
+              class="w-full min-w-0 truncate text-xs text-on-surface-variant"
               [matTooltip]="step.command.join(' ')"
             >
               {{ step.command.join(' ') }}

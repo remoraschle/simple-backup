@@ -32,6 +32,13 @@ describe('RunStatusChip', () => {
     expect(new Set(icons).size).toBe(icons.length);
   });
 
+  it('benennt auch die Zustaende, die nur Schritte kennen', () => {
+    // Ohne eigene Faelle landete ein uebersprungener Schritt beim Standardtext
+    // "Noch nie gelaufen" -- und der ergibt fuer einen Schritt keinen Sinn.
+    expect(render('SKIPPED').textContent).toContain('Übersprungen');
+    expect(render('PENDING').textContent).toContain('Ausstehend');
+  });
+
   it('behandelt einen Plan ohne Lauf als eigenen Zustand', () => {
     // Nicht als Fehler und nicht als Erfolg: Er ist schlicht noch nie gelaufen.
     expect(render(null).textContent).toContain('Noch nie gelaufen');

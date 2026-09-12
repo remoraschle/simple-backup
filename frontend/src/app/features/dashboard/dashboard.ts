@@ -6,7 +6,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
 import { CatalogService } from '../../core/api/catalog.service';
-import { formatRelative } from '../../core/api/format';
+import { formatRelative, plural } from '../../core/api/format';
 import { Plan } from '../../core/api/models';
 import { EmptyState } from '../../shared/empty-state';
 import { PageHeader } from '../../shared/page-header';
@@ -40,6 +40,9 @@ export class Dashboard {
   protected readonly plans = signal<Plan[]>([]);
   protected readonly loading = signal(true);
 
+  /** Nur eingeschaltete Plaene -- ein abgeschalteter sichert nichts und zaehlt nicht mit. */
+  protected readonly active = computed(() => this.plans().filter((plan) => plan.enabled));
+
   protected readonly failing = computed(() =>
     this.plans().filter(
       (plan) => plan.lastRunStatus === 'FAILED' || plan.lastRunStatus === 'TIMEOUT',
@@ -69,6 +72,7 @@ export class Dashboard {
   );
 
   protected readonly relative = formatRelative;
+  protected readonly plural = plural;
 
   constructor() {
     this.catalog.listPlans().subscribe({

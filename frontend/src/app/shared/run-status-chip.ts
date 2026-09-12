@@ -1,7 +1,7 @@
 import { Component, computed, input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { RunStatus } from '../core/api/models';
+import { RunStatus, StepStatus } from '../core/api/models';
 
 interface StatusAppearance {
   readonly icon: string;
@@ -26,13 +26,13 @@ interface StatusAppearance {
       [class]="appearance().classes"
       [matTooltip]="appearance().hint"
     >
-      <mat-icon class="!h-4 !w-4 !text-base leading-4">{{ appearance().icon }}</mat-icon>
+      <mat-icon class="h-4 w-4 text-base leading-4">{{ appearance().icon }}</mat-icon>
       {{ appearance().label }}
     </span>
   `,
 })
 export class RunStatusChip {
-  readonly status = input.required<RunStatus | string | null>();
+  readonly status = input.required<RunStatus | StepStatus | string | null>();
 
   protected readonly appearance = computed<StatusAppearance>(() => {
     switch (this.status()) {
@@ -77,6 +77,21 @@ export class RunStatusChip {
           label: 'Zeitlimit',
           classes: 'bg-status-failed/15 text-status-failed',
           hint: 'Das Zeitlimit wurde überschritten und der Lauf abgebrochen',
+        };
+      // Schritte kennen zwei Zustaende mehr als ein Lauf.
+      case 'SKIPPED':
+        return {
+          icon: 'skip_next',
+          label: 'Übersprungen',
+          classes: 'bg-status-idle/15 text-status-idle',
+          hint: 'Dieser Schritt war nicht nötig',
+        };
+      case 'PENDING':
+        return {
+          icon: 'schedule',
+          label: 'Ausstehend',
+          classes: 'bg-status-idle/15 text-status-idle',
+          hint: 'Dieser Schritt kommt noch',
         };
       case 'CANCELLED':
         return {

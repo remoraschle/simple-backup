@@ -14,6 +14,7 @@ import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import tools.jackson.databind.ObjectMapper;
@@ -88,7 +89,11 @@ class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                         .sessionFixation(fixation -> fixation.changeSessionId())
                         // Ein gestohlenes Cookie soll nicht beliebig viele Sitzungen erlauben.
-                        .maximumSessions(5));
+                        .maximumSessions(5))
+
+                // Nach der Rechtepruefung: Wer noch auf dem Erstpasswort sitzt, kommt nicht
+                // an die API, auch nicht am Frontend vorbei.
+                .addFilterAfter(new PasswordChangeRequiredFilter(objectMapper), AuthorizationFilter.class);
 
         return http.build();
     }

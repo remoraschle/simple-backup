@@ -58,6 +58,17 @@ describe('formatRelative', () => {
     expect(formatRelative(undefined)).toBe('nie');
   });
 
+  it('setzt die Einzahl, wo nur eine Einheit vergangen ist', () => {
+    // "vor 1 Minuten" stand nach jedem frisch beendeten Lauf in der Liste.
+    const vorEinerMinute = new Date(Date.now() - 65 * 1000).toISOString();
+    const vorEinerStunde = new Date(Date.now() - 3600 * 1000).toISOString();
+    const inEinemTag = new Date(Date.now() + 86400 * 1000).toISOString();
+
+    expect(formatRelative(vorEinerMinute)).toBe('vor 1 Minute');
+    expect(formatRelative(vorEinerStunde)).toBe('vor 1 Stunde');
+    expect(formatRelative(inEinemTag)).toBe('in 1 Tag');
+  });
+
   it('rundet auf Tage, wenn es lange her ist', () => {
     const vorDreiTagen = new Date(Date.now() - 3 * 86400 * 1000).toISOString();
 

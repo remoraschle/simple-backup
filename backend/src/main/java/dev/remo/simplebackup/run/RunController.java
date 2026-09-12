@@ -1,9 +1,12 @@
 package dev.remo.simplebackup.run;
 
+import dev.remo.simplebackup.catalog.CatalogService;
 import dev.remo.simplebackup.security.AuditService;
 import java.security.Principal;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
@@ -23,10 +26,12 @@ class RunController {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final RunService runService;
+    private final CatalogService catalog;
     private final AuditService audit;
 
-    RunController(RunService runService, AuditService audit) {
+    RunController(RunService runService, CatalogService catalog, AuditService audit) {
         this.runService = runService;
+        this.catalog = catalog;
         this.audit = audit;
     }
 
@@ -36,13 +41,19 @@ class RunController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size) {
 
-        return runService.findRuns(planId, PageRequest.of(Math.max(0, page), Math.clamp(size, 1, MAX_PAGE_SIZE)))
-                .map(RunViews.RunSummary::of);
+        Page<BackupRun> runs = runService.findRuns(planId,
+                PageRequest.of(Math.max(0, page), Math.clamp(size, 1, MAX_PAGE_SIZE)));
+
+        Map<UUID, String> names = catalog.planNames(
+                runs.getContent().stream().map(BackupRun::getPlanId).collect(Collectors.toSet()));
+
+        return runs.map(run -> RunViews.RunSummary.of(run, names.get(run.getPlanId())));
     }
 
     @GetMapping("/{id}")
     RunViews.RunDetail get(@PathVariable UUID id) {
-        return RunViews.RunDetail.of(runService.findRun(id));
+        BackupRun run = runService.findRun(id);
+        return RunViews.RunDetail.of(run, catalog.planNames(Set.of(run.getPlanId())).get(run.getPlanId()));
     }
 
     /**

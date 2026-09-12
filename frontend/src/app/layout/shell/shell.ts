@@ -38,12 +38,11 @@ export class Shell {
   protected readonly sidenavOpen = signal(true);
 
   protected readonly navigation: readonly NavigationEntry[] = [
-    { path: '/', label: 'Uebersicht', icon: 'dashboard' },
-    { path: '/plaene', label: 'Plaene', icon: 'event_repeat' },
+    { path: '/', label: 'Übersicht', icon: 'dashboard' },
+    { path: '/plaene', label: 'Pläne', icon: 'event_repeat' },
     { path: '/quellen', label: 'Quellen', icon: 'folder_open' },
     { path: '/ziele', label: 'Ziele', icon: 'save' },
-    { path: '/laeufe', label: 'Laeufe', icon: 'history' },
-    { path: '/wiederherstellen', label: 'Wiederherstellen', icon: 'restore' },
+    { path: '/laeufe', label: 'Läufe', icon: 'history' },
     { path: '/einstellungen', label: 'Einstellungen', icon: 'settings' },
   ];
 

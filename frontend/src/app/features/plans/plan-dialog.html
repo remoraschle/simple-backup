@@ -41,8 +41,8 @@
             matButton="outlined"
             type="button"
             (click)="usePreset(preset.value)"
-            [class.!bg-primary]="form.controls.cronExpression.value === preset.value"
-            [class.!text-on-primary]="form.controls.cronExpression.value === preset.value"
+            [class.bg-primary]="form.controls.cronExpression.value === preset.value"
+            [class.text-on-primary]="form.controls.cronExpression.value === preset.value"
           >
             {{ preset.label }}
           </button>

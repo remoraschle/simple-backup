@@ -26,7 +26,7 @@ export const errorInterceptor: HttpInterceptorFn = (request, next) => {
           duration: 6000,
         });
       } else if (error.status === 403) {
-        snackBar.open('Dafuer fehlt die Berechtigung.', 'OK', { duration: 6000 });
+        snackBar.open('Dafür fehlt die Berechtigung.', 'OK', { duration: 6000 });
       } else if (!isSessionProbe && error.status !== 0) {
         snackBar.open(messageFor(error), 'OK', { duration: 8000 });
       } else if (error.status === 0) {

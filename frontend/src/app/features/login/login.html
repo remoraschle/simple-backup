@@ -4,11 +4,13 @@
       <mat-progress-bar mode="indeterminate" />
     }
 
-    <mat-card-header class="flex-col items-center gap-2 pt-8 pb-2">
+    <!-- Bewusst ohne mat-card-header: Der schiebt alles, was nicht Titel oder Untertitel
+         ist, ans Ende -- das Symbol stuende dann unter der Beschriftung. -->
+    <div class="flex flex-col items-center gap-2 px-4 pt-8 pb-2">
       <mat-icon class="scale-150 text-primary">backup</mat-icon>
-      <mat-card-title>simple-backup</mat-card-title>
-      <mat-card-subtitle>Anmeldung erforderlich</mat-card-subtitle>
-    </mat-card-header>
+      <h1 class="m-0 text-xl font-medium">simple-backup</h1>
+      <p class="m-0 text-on-surface-variant">Anmeldung erforderlich</p>
+    </div>
 
     <mat-card-content>
       <form [formGroup]="form" (ngSubmit)="submit()" class="flex flex-col gap-2 pt-4">

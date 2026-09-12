@@ -12,8 +12,11 @@ import dev.remo.simplebackup.shared.RetentionRule;
 import dev.remo.simplebackup.shared.ConflictException;
 import dev.remo.simplebackup.shared.NotFoundException;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -189,6 +192,22 @@ public class CatalogService {
     }
 
     // ------------------------------------------------------------------ Plaene
+
+    /**
+     * Namen zu Plan-Kennungen.
+     *
+     * <p>Die Lauf-Liste soll zeigen, zu welchem Plan ein Lauf gehoert. Ein Lauf kennt aber
+     * nur die Kennung -- eine Seite Laeufe schlaegt die Namen deshalb in einer Abfrage nach,
+     * statt fuer jede Zeile einzeln.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, String> planNames(Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return plans.findByIdIn(ids).stream()
+                .collect(Collectors.toMap(PlanRepository.PlanName::getId, PlanRepository.PlanName::getName));
+    }
 
     @Transactional(readOnly = true)
     public List<PlanView> listPlans() {

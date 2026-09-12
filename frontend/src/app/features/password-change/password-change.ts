@@ -58,7 +58,7 @@ export class PasswordChange {
       next: () => {
         this.submitting.set(false);
         // Das Backend beendet die Sitzung; eine erneute Anmeldung ist Absicht.
-        this.snackBar.open('Passwort geaendert. Bitte neu anmelden.', 'OK', { duration: 8000 });
+        this.snackBar.open('Passwort geändert. Bitte neu anmelden.', 'OK', { duration: 8000 });
         void this.router.navigate(['/login']);
       },
       error: () => this.submitting.set(false),

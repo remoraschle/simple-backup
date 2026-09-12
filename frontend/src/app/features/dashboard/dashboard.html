@@ -23,7 +23,7 @@
         <div>
           <p class="m-0 text-lg font-medium">Alle Pläne sind in Ordnung</p>
           <p class="mt-1 mb-0 text-on-surface-variant">
-            {{ plans().length }} aktive Pläne, keiner davon auffällig.
+            {{ plural(active().length, 'aktiver Plan', 'aktive Pläne') }}, keiner davon auffällig.
           </p>
         </div>
       } @else {
@@ -32,16 +32,21 @@
           <p class="m-0 text-lg font-medium">Es gibt etwas zu prüfen</p>
           <ul class="mt-1 mb-0 pl-5 text-on-surface-variant">
             @if (failing().length) {
-              <li>{{ failing().length }} Plan/Pläne zuletzt fehlgeschlagen</li>
+              <li>
+                {{ plural(failing().length, 'Plan ist', 'Pläne sind') }} zuletzt fehlgeschlagen
+              </li>
             }
             @if (partial().length) {
-              <li>{{ partial().length }} Plan/Pläne nur teilweise erfolgreich</li>
+              <li>
+                {{ plural(partial().length, 'Plan war', 'Pläne waren') }} nur teilweise erfolgreich
+              </li>
             }
             @if (neverRan().length) {
               <li>
-                {{ neverRan().length }} aktive/r Plan/Pläne noch nie gelaufen
+                {{ plural(neverRan().length, 'aktiver Plan ist', 'aktive Pläne sind') }} noch nie
+                gelaufen
                 <span matTooltip="Ein Backup, das nie läuft, meldet sich nie von selbst.">
-                  <mat-icon class="!h-4 !w-4 !text-base align-middle">info_outline</mat-icon>
+                  <mat-icon class="h-4 w-4 text-base leading-4 align-middle">info_outline</mat-icon>
                 </span>
               </li>
             }

@@ -13,12 +13,19 @@
  *
  * Ohne diese Festlegung entscheidet die Ladereihenfolge, und die aendert sich beim naechsten
  * Umbau unbemerkt.
+ *
+ * Die Utilities tragen zusaetzlich `important`. Das ist kein Schoenheitsfehler, sondern
+ * noetig: Angular Material bringt seine Komponentenstile zur Laufzeit ein, und zwar ohne
+ * Layer. Nicht zugeordnetes CSS gewinnt aber gegen jedes zugeordnete -- `.mat-mdc-card-content
+ * { display: block }` schlug damit jedes `flex` im Markup, und zwar lautlos: Die Klasse stand
+ * da, wirkte aber nicht. Mit `important` greifen die Utilities wieder, und die einzelnen
+ * `!`-Praefixe, die sich bis dahin angesammelt hatten, entfallen.
  */
 @layer tw-theme, tw-base, material, tw-components, tw-utilities;
 
 @import 'tailwindcss/theme.css' layer(tw-theme);
 @import 'tailwindcss/preflight.css' layer(tw-base);
-@import 'tailwindcss/utilities.css' layer(tw-utilities);
+@import 'tailwindcss/utilities.css' layer(tw-utilities) important;
 
 /*
  * Eine einzige Farbquelle.

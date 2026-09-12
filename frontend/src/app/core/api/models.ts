@@ -126,6 +126,7 @@ export interface Plan {
 export interface Run {
   readonly id: string;
   readonly planId: string;
+  readonly planName: string | null;
   readonly status: RunStatus;
   readonly trigger: string;
   readonly queuedAt: string;
