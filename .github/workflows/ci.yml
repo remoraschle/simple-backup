@@ -28,6 +28,11 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
 
+      # Fuer den End-to-End-Test: Er sichert wirklich und stellt wirklich wieder her.
+      # Ohne restic wird er uebersprungen -- dann liefe die wichtigste Pruefung ins Leere.
+      - name: restic installieren
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends restic
+
       # Die Integrationstests laufen gegen ein echtes PostgreSQL in einem Container.
       # Gegen eine eingebettete Datenbank zu testen hiesse, das Falsche zu testen: Das
       # Schema nutzt JSONB, Teilindizes und gen_random_uuid().

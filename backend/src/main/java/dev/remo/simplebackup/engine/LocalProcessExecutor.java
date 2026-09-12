@@ -12,6 +12,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -57,13 +58,21 @@ public class LocalProcessExecutor implements BackupExecutor {
 
         try {
             secretsDirectory = writeSecrets(request);
+            final Path secretsPath = secretsDirectory;
 
-            ProcessBuilder builder = new ProcessBuilder(request.command());
-            builder.environment().putAll(request.environment());
-            if (secretsDirectory != null) {
-                // Der Runner findet seine Geheimnisse im Betrieb unter /run/secrets. Lokal
-                // gibt es kein tmpfs, deshalb bekommt der Prozess den Ersatzpfad genannt.
-                builder.environment().put("SIMPLEBACKUP_SECRETS_DIR", secretsDirectory.toString());
+            // Der Aufrufer nennt Geheimnisdateien unter /run/secrets, weil sie dort im
+            // Container liegen. Hier gibt es dieses Verzeichnis nicht -- der Pfad wird
+            // deshalb in Kommando und Umgebung auf das temporaere Verzeichnis umgebogen.
+            //
+            // Ohne diese Uebersetzung liefe ein Werkzeug, das seine Zugangsdaten aus einer
+            // Datei liest, unweigerlich ins Leere.
+            ProcessBuilder builder = new ProcessBuilder(rewriteSecretPaths(request.command(), secretsPath));
+
+            request.environment().forEach((name, value) ->
+                    builder.environment().put(name, rewriteSecretPath(value, secretsPath)));
+
+            if (secretsPath != null) {
+                builder.environment().put("SIMPLEBACKUP_SECRETS_DIR", secretsPath.toString());
             }
             // Beide Stroeme zusammen: Viele Werkzeuge melden Fortschritt auf dem einen und
             // Fehler auf dem anderen Strom, ohne sich an eine Regel zu halten.
@@ -124,6 +133,18 @@ public class LocalProcessExecutor implements BackupExecutor {
             redactor.register(secret.getValue());
         }
         return directory;
+    }
+
+    private static List<String> rewriteSecretPaths(List<String> arguments, Path secretsDirectory) {
+        return arguments.stream().map(argument -> rewriteSecretPath(argument, secretsDirectory)).toList();
+    }
+
+    private static String rewriteSecretPath(String value, Path secretsDirectory) {
+        if (secretsDirectory == null || value == null
+                || !value.contains(ExecutionRequest.SECRETS_DIRECTORY)) {
+            return value;
+        }
+        return value.replace(ExecutionRequest.SECRETS_DIRECTORY, secretsDirectory.toString());
     }
 
     private static void deleteRecursively(Path directory) {

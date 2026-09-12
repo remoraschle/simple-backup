@@ -10,9 +10,13 @@ wiederherstellbar.
 
 ## Status
 
-**Meilenstein M0 — Gerüst.** Anmeldung, Datenbankschema, verschlüsselte Zugangsdaten,
-Container-Aufbau und CI stehen. Der Ausführungsteil (Runner, Scheduler, echte Backups) folgt
-mit M1 und M2.
+**M0–M2 weitgehend abgeschlossen.** Das Werkzeug sichert: Pläne mit mehreren Zielen,
+Zeitplanung, Ausführung in Containern, Lauf-Historie mit Teilerfolg. Ein End-to-End-Test
+sichert mit echtem restic und stellt die Dateien wieder her.
+
+Noch offen für M2: Live-Logs per Server-Sent Events und die Oberfläche für Pläne, Quellen,
+Ziele und Läufe. Danach M3 (Benachrichtigung, Aufbewahrung, Totmannschalter) und M4
+(Wiederherstellung über die Oberfläche).
 
 ## Dokumentation
 
@@ -63,6 +67,10 @@ Tests:
 cd backend  && ./mvnw verify                 # startet PostgreSQL via Testcontainers
 cd frontend && npx ng test --watch=false
 ```
+
+Ist `restic` installiert, läuft zusätzlich ein End-to-End-Test, der wirklich sichert und
+wiederherstellt. Ohne restic wird er übersprungen — dann fehlt allerdings die
+aussagekräftigste Prüfung.
 
 Ohne Docker lässt sich eine vorhandene PostgreSQL-Instanz verwenden:
 
