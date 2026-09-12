@@ -1,0 +1,105 @@
+<sb-page-header title="Lauf">
+  <div class="flex gap-2">
+    <a matButton routerLink="/laeufe">
+      <mat-icon>arrow_back</mat-icon>
+      Zur Übersicht
+    </a>
+    @if (isRunning()) {
+      <button matButton="outlined" (click)="cancel()">
+        <mat-icon>stop</mat-icon>
+        Abbrechen
+      </button>
+    }
+  </div>
+</sb-page-header>
+
+@if (detail(); as run) {
+  <mat-card class="mb-6">
+    <mat-card-content class="py-5">
+      <div class="flex flex-wrap items-center gap-4">
+        <sb-run-status-chip [status]="status()" />
+        <span class="text-on-surface-variant">
+          Dauer {{ duration(run.summary.durationSeconds) }}
+        </span>
+        <span
+          class="text-on-surface-variant"
+          matTooltip="Nach Deduplizierung tatsächlich übertragen"
+        >
+          Übertragen {{ bytes(run.summary.bytesTransferred) }}
+        </span>
+        @if (run.summary.filesNew !== null) {
+          <span class="text-on-surface-variant">
+            {{ run.summary.filesNew }} neu, {{ run.summary.filesChanged }} geändert
+          </span>
+        }
+      </div>
+
+      @if (run.summary.errorSummary) {
+        <p class="mt-4 mb-0 rounded-md bg-status-failed/10 p-3 text-status-failed">
+          {{ run.summary.errorSummary }}
+        </p>
+      }
+
+      @if (progress(); as current) {
+        <div class="mt-4">
+          <mat-progress-bar mode="determinate" [value]="current.percent" />
+          <p class="mt-1 mb-0 text-sm text-on-surface-variant">
+            {{ current.percent }} %
+            @if (current.filesDone !== null && current.totalFiles !== null) {
+              · {{ current.filesDone }} von {{ current.totalFiles }} Dateien
+            }
+            @if (current.bytesDone !== null) {
+              · {{ bytes(current.bytesDone) }}
+            }
+            @if (current.secondsRemaining !== null) {
+              · noch etwa {{ duration(current.secondsRemaining) }}
+            }
+          </p>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <h2 class="mb-3 text-lg font-medium">Schritte</h2>
+  <div class="mb-6 flex flex-col gap-2">
+    @for (step of run.steps; track step.id) {
+      <mat-card>
+        <mat-card-content class="flex flex-wrap items-center gap-3 py-3">
+          <sb-run-status-chip [status]="step.status" />
+          <span class="font-medium">{{ step.message ?? step.kind }}</span>
+          @if (step.exitCode !== null) {
+            <span class="text-sm text-on-surface-variant"> Rückgabewert {{ step.exitCode }} </span>
+          }
+          @if (step.command.length) {
+            <code
+              class="w-full truncate text-xs text-on-surface-variant"
+              [matTooltip]="step.command.join(' ')"
+            >
+              {{ step.command.join(' ') }}
+            </code>
+          }
+        </mat-card-content>
+      </mat-card>
+    } @empty {
+      <p class="m-0 text-on-surface-variant">Noch keine Schritte.</p>
+    }
+  </div>
+
+  <div class="mb-3 flex items-center justify-between gap-4">
+    <h2 class="m-0 text-lg font-medium">Protokoll</h2>
+    @if (isRunning()) {
+      <mat-slide-toggle [checked]="follow()" (change)="follow.set($event.checked)">
+        Mitlaufen
+      </mat-slide-toggle>
+    }
+  </div>
+
+  <!-- Die Ausgabe ist bereits von Geheimnissen bereinigt; sie kann unverändert gezeigt werden. -->
+  <pre
+    #logContainer
+    class="m-0 max-h-120 overflow-auto rounded-lg border border-outline-variant bg-surface-container p-4 text-xs leading-relaxed"
+  >@for (line of logLines(); track $index) {{{ line }}
+}</pre>
+} @else if (!loading()) {
+  <p class="text-on-surface-variant">Dieser Lauf existiert nicht.</p>
+}

@@ -1,0 +1,91 @@
+<h2 mat-dialog-title>Ziel anlegen</h2>
+
+<mat-dialog-content>
+  <form [formGroup]="form" class="flex w-full flex-col gap-2 pt-2 sm:w-120">
+    <mat-form-field>
+      <mat-label>Name</mat-label>
+      <input matInput formControlName="name" autofocus />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Art</mat-label>
+      <mat-select formControlName="type">
+        <mat-option value="LOCAL_PATH">Verzeichnis oder Netzlaufwerk</mat-option>
+        <mat-option value="S3">S3 oder S3-kompatibel</mat-option>
+        <mat-option value="SFTP" disabled>SFTP (noch nicht umgesetzt)</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Modus</mat-label>
+      <mat-select formControlName="mode">
+        <mat-option value="RESTIC">restic — versioniert, verschlüsselt, dedupliziert</mat-option>
+        <mat-option value="MIRROR" disabled>Spiegel — 1:1-Kopie (noch nicht umgesetzt)</mat-option>
+      </mat-select>
+      <mat-hint>
+        Nur im restic-Modus gibt es Snapshots, Aufbewahrungsregeln und einen Browser zum
+        Wiederherstellen.
+      </mat-hint>
+    </mat-form-field>
+
+    @if (type() === 'LOCAL_PATH') {
+      <mat-form-field class="mt-4">
+        <mat-label>Pfad</mat-label>
+        <input matInput formControlName="path" placeholder="/mnt/nas/backups/fotos" />
+        <mat-hint>Muss im Backend-Container eingehängt und beschreibbar sein</mat-hint>
+      </mat-form-field>
+    } @else {
+      <mat-form-field class="mt-4">
+        <mat-label>Adresse</mat-label>
+        <input
+          matInput
+          formControlName="endpoint"
+          placeholder="https://s3.eu-central-1.amazonaws.com"
+        />
+        <mat-hint>Mit http:// oder https://, auch für MinIO im eigenen Netz</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field class="mt-4">
+        <mat-label>Bucket</mat-label>
+        <input matInput formControlName="bucket" />
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Pfad im Bucket</mat-label>
+        <input matInput formControlName="prefix" placeholder="server1/fotos" />
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Zugangsdaten</mat-label>
+        <mat-select formControlName="credentialId">
+          @for (credential of s3Keys(); track credential.id) {
+            <mat-option [value]="credential.id">{{ credential.name }}</mat-option>
+          }
+        </mat-select>
+        @if (s3Keys().length === 0) {
+          <mat-hint>Zuerst unter Einstellungen ein S3-Schlüsselpaar hinterlegen</mat-hint>
+        }
+      </mat-form-field>
+    }
+
+    @if (mode() === 'RESTIC') {
+      <mat-form-field class="mt-4">
+        <mat-label>Repository-Passwort</mat-label>
+        <mat-select formControlName="repositoryPasswordCredentialId">
+          @for (credential of repositoryPasswords(); track credential.id) {
+            <mat-option [value]="credential.id">{{ credential.name }}</mat-option>
+          }
+        </mat-select>
+        <mat-hint>
+          Ohne dieses Passwort sind die Sicherungen später nicht mehr lesbar. Es gibt keine
+          Hintertür — im Passwortmanager sichern.
+        </mat-hint>
+      </mat-form-field>
+    }
+  </form>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button matButton mat-dialog-close>Abbrechen</button>
+  <button matButton="filled" (click)="save()" [disabled]="!valid">Anlegen</button>
+</mat-dialog-actions>

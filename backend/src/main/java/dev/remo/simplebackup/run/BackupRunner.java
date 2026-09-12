@@ -96,12 +96,17 @@ public class BackupRunner {
 
         // Schritt 1: Gibt es das Repository schon? Der Rueckgabewert sagt es, ohne dass eine
         // Ausgabe gedeutet werden muesste.
+        //
+        // Ein Fehlschlag ist hier der Normalfall beim ersten Lauf und kein Problem. Er wird
+        // deshalb als uebersprungen vermerkt -- "fehlgeschlagen" in der Historie wuerde bei
+        // jedem neuen Ziel nach einem Fehler aussehen, den es nie gab.
         StepOutcome probe = execute(plan, target, StepKind.PREPARE, "Repository prüfen",
-                ResticCommands.catConfig(), repository, mounts, listener, Duration.ofMinutes(5));
+                ResticCommands.catConfig(), repository, mounts, listener, Duration.ofMinutes(5),
+                "Noch nicht vorhanden — wird angelegt");
 
         if (!probe.successful()) {
             StepOutcome init = execute(plan, target, StepKind.PREPARE, "Repository anlegen",
-                    ResticCommands.init(), repository, mounts, listener, Duration.ofMinutes(10));
+                    ResticCommands.init(), repository, mounts, listener, Duration.ofMinutes(10), null);
 
             if (!init.successful()) {
                 return TargetOutcome.failed(target,
@@ -115,16 +120,25 @@ public class BackupRunner {
                 excludesOf(plan), null, oneFileSystemOf(plan));
 
         StepOutcome transfer = execute(plan, target, StepKind.TRANSFER,
-                "Sicherung auf " + target.name(), backup, repository, mounts, listener, plan.timeout());
+                "Sicherung auf " + target.name(), backup, repository, mounts, listener,
+                plan.timeout(), null);
 
         return transfer.successful()
                 ? TargetOutcome.succeeded(target, transfer.summary())
                 : TargetOutcome.failed(target, transfer.message());
     }
 
+    /**
+     * Fuehrt einen Schritt aus.
+     *
+     * @param expectedFailureNote ist gesetzt, wenn ein Fehlschlag zum erwarteten Ablauf
+     *                            gehoert. Der Schritt gilt dann als uebersprungen und traegt
+     *                            diesen Text statt der Fehlerausgabe des Werkzeugs.
+     */
     private StepOutcome execute(ExecutablePlan plan, ExecutableTarget target, StepKind kind,
             String description, List<String> command, ResticRepository repository,
-            List<VolumeMount> mounts, RunProgressListener listener, Duration timeout) {
+            List<VolumeMount> mounts, RunProgressListener listener, Duration timeout,
+            String expectedFailureNote) {
 
         var builder = ExecutionRequest.builder(executor.defaultEnvironment(), command.toArray(String[]::new))
                 .executionId(UUID.randomUUID().toString())
@@ -160,8 +174,13 @@ public class BackupRunner {
             });
 
             ExecutionResult result = running.awaitCompletion(timeout);
-            listener.stepFinished(stepHandle, toStepStatus(result.status()), result.exitCode(),
-                    result.isSuccess() ? description : result.lastError());
+
+            boolean expectedFailure = !result.isSuccess() && expectedFailureNote != null;
+            StepStatus status = expectedFailure ? StepStatus.SKIPPED : toStepStatus(result.status());
+            String message = result.isSuccess() ? description
+                    : expectedFailure ? expectedFailureNote : result.lastError();
+
+            listener.stepFinished(stepHandle, status, result.exitCode(), message);
 
             return new StepOutcome(result.isSuccess(), result.lastError(), lastSummary.get());
 

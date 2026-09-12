@@ -1,0 +1,53 @@
+<h2 mat-dialog-title>Quelle anlegen</h2>
+
+<mat-dialog-content>
+  <form [formGroup]="form" class="flex w-full flex-col gap-2 pt-2 sm:w-120">
+    <mat-form-field>
+      <mat-label>Name</mat-label>
+      <input matInput formControlName="name" autofocus />
+      <mat-hint>Erscheint in Plänen und in der Lauf-Historie</mat-hint>
+    </mat-form-field>
+
+    <mat-form-field class="mt-2">
+      <mat-label>Beschreibung</mat-label>
+      <input matInput formControlName="description" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Pfade</mat-label>
+      <textarea
+        matInput
+        formControlName="paths"
+        rows="3"
+        placeholder="/sources/fotos&#10;/sources/dokumente"
+      ></textarea>
+      <mat-hint>
+        Ein Pfad je Zeile, wie er im Backend-Container sichtbar ist. Nicht eingehängte Pfade werden
+        abgelehnt — ein Runner könnte sie nicht erreichen.
+      </mat-hint>
+    </mat-form-field>
+
+    <mat-form-field class="mt-6">
+      <mat-label>Ausschlüsse</mat-label>
+      <textarea
+        matInput
+        formControlName="excludes"
+        rows="2"
+        placeholder="*.tmp&#10;node_modules"
+      ></textarea>
+      <mat-hint>Ein Muster je Zeile, in der Schreibweise von restic</mat-hint>
+    </mat-form-field>
+
+    <mat-slide-toggle formControlName="oneFileSystem" class="mt-6">
+      An Dateisystemgrenzen haltmachen
+    </mat-slide-toggle>
+    <p class="mt-1 mb-0 text-sm text-on-surface-variant">
+      Verhindert, dass ein unterhalb eingehängtes Netzlaufwerk unbemerkt mitgesichert wird.
+    </p>
+  </form>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button matButton mat-dialog-close>Abbrechen</button>
+  <button matButton="filled" (click)="save()" [disabled]="form.invalid">Anlegen</button>
+</mat-dialog-actions>

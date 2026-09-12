@@ -91,6 +91,15 @@ class EngineConfiguration {
     MountTranslator mountTranslator(SelfInspector inspector, DockerProperties properties,
             Environment environment) {
 
+        // Ausdrueckliche Angaben haben Vorrang: Sie sind der Ausweg dort, wo es keine
+        // eigene Mount-Tabelle gibt -- etwa in der lokalen Entwicklung.
+        if (!properties.mounts().isEmpty()) {
+            List<VolumeMount> configured = SelfInspector.parseMounts(properties.mounts());
+            log.info("{} ausdruecklich konfigurierte Einhaengungen: {}", configured.size(),
+                    configured.stream().map(VolumeMount::target).toList());
+            return new MountTranslator(configured);
+        }
+
         List<VolumeMount> mounts = SelfInspector
                 .detectContainerId(environment.getProperty("simplebackup.docker.self-container-id"),
                         System.getenv())

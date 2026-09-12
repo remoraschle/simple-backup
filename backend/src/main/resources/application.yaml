@@ -86,6 +86,11 @@ simplebackup:
     runner-user: ${SIMPLEBACKUP_RUNNER_USER:1000:1000}
     # Nur noetig, wenn in der Compose-Datei ein eigener hostname gesetzt wurde.
     self-container-id: ${SIMPLEBACKUP_SELF_CONTAINER_ID:}
+    # Normalerweise leer: Die Einhaengungen kommen aus der eigenen Mount-Tabelle. Gebraucht
+    # wird die Angabe dort, wo es keine gibt -- in der lokalen Entwicklung ausserhalb eines
+    # Containers waere sonst keine einzige Quelle anlegbar.
+    # Format: /host/pfad:/container/pfad[:ro]
+    mounts: ${SIMPLEBACKUP_MOUNTS:}
 
   run:
     log-directory: ${SIMPLEBACKUP_LOG_DIR:/var/lib/simple-backup/logs}

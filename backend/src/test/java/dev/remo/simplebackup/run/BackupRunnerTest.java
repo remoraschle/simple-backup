@@ -92,6 +92,22 @@ class BackupRunnerTest {
         }
 
         @Test
+        @DisplayName("Ein fehlendes Repository gilt als uebersprungen, nicht als fehlgeschlagen")
+        void missingRepositoryIsNotAFailure() {
+            // Beim ersten Lauf eines Ziels ist das der Normalfall. "Fehlgeschlagen" in der
+            // Historie liesse jedes neue Ziel nach einem Fehler aussehen, den es nie gab --
+            // und wer die Historie nicht ernst nimmt, uebersieht den echten Fehler.
+            executor.whenCommandContains("config", 1,
+                    "Is there a repository at the following location?", "/mnt/nas/backups");
+
+            runner.run(planWith(localTarget("NAS", "/mnt/nas/backups")), listener);
+
+            var probe = listener.started.getFirst();
+            assertThat(listener.finished.get(probe.id())).isEqualTo(StepStatus.SKIPPED);
+            assertThat(listener.messages.get(probe.id())).isEqualTo("Noch nicht vorhanden — wird angelegt");
+        }
+
+        @Test
         @DisplayName("Laesst sich das Repository nicht anlegen, wird nicht gesichert")
         void abortsWhenInitialisationFails() {
             executor.whenCommandContains("config", 1)

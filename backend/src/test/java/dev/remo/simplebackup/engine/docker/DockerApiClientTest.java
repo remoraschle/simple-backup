@@ -26,7 +26,7 @@ class DockerApiClientTest {
         api = new FakeDockerApi();
         client = new DockerApiClient(
                 new DockerProperties(api.baseUrl(), "v1.51", Duration.ofSeconds(2),
-                        Duration.ofSeconds(5), null, null),
+                        Duration.ofSeconds(5), null, null, null),
                 new ObjectMapper());
     }
 
@@ -319,7 +319,7 @@ class DockerApiClientTest {
         void explainsUnreachableApi() {
             var unreachable = new DockerApiClient(
                     new DockerProperties("http://127.0.0.1:1", "v1.51", Duration.ofMillis(500),
-                            Duration.ofSeconds(1), null, null),
+                            Duration.ofSeconds(1), null, null, null),
                     new ObjectMapper());
 
             assertThatThrownBy(() -> unreachable.systemInfo())
@@ -353,7 +353,7 @@ class DockerApiClientTest {
         @DisplayName("DOCKER_HOST im tcp-Format wird auf http umgestellt")
         void normalizesTcpScheme() {
             // DOCKER_HOST wird gewoehnlich als tcp:// gesetzt, HTTP-Clients kennen das nicht.
-            var properties = new DockerProperties("tcp://dockerproxy:2375", null, null, null, null, null);
+            var properties = new DockerProperties("tcp://dockerproxy:2375", null, null, null, null, null, null);
 
             assertThat(properties.host()).isEqualTo("http://dockerproxy:2375");
             assertThat(properties.baseUrl()).isEqualTo("http://dockerproxy:2375/v1.51");
@@ -362,14 +362,14 @@ class DockerApiClientTest {
         @Test
         @DisplayName("Ein abschliessender Schraegstrich fuehrt nicht zu doppelten Trennern")
         void stripsTrailingSlash() {
-            assertThat(new DockerProperties("http://host:2375/", null, null, null, null, null).baseUrl())
+            assertThat(new DockerProperties("http://host:2375/", null, null, null, null, null, null).baseUrl())
                     .isEqualTo("http://host:2375/v1.51");
         }
 
         @Test
         @DisplayName("Der Runner laeuft als unprivilegierter Benutzer")
         void defaultsToUnprivilegedUser() {
-            assertThat(new DockerProperties(null, null, null, null, null, null).runnerUser())
+            assertThat(new DockerProperties(null, null, null, null, null, null, null).runnerUser())
                     .isEqualTo("1000:1000");
         }
     }

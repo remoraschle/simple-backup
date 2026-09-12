@@ -7,6 +7,7 @@ import dev.remo.simplebackup.shared.NotFoundException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
@@ -17,22 +18,27 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * Startet Laeufe, haelt ihren Verlauf fest und begrenzt die Nebenlaeufigkeit.
+ * Startet Laeufe, begrenzt die Nebenlaeufigkeit und verteilt ihren Verlauf.
  *
  * <p>Die Ausfuehrung laeuft in einem eigenen Thread, nicht im aufrufenden: Ein Backup dauert
- * Minuten bis Stunden. Der Aufrufer -- Scheduler oder API -- bekommt sofort die Kennung des
+ * Minuten bis Stunden. Der Aufrufer -- Zeitplaner oder API -- bekommt sofort die Kennung des
  * Laufs zurueck.
+ *
+ * <p>Alles, was in die Datenbank geht, laeuft ueber {@link RunPersistence}. Der Umweg ist
+ * kein Zierat: Spring legt {@code @Transactional} als Stellvertreter um die Bean, und ein
+ * Aufruf innerhalb derselben Klasse ginge daran vorbei.
  */
 @Service
 public class RunService {
 
     private static final Logger log = LoggerFactory.getLogger(RunService.class);
-    private static final List<RunStatus> ACTIVE = List.of(RunStatus.QUEUED, RunStatus.RUNNING);
 
     private final RunRepository runs;
-    private final RunStepRepository steps;
+    private final RunPersistence persistence;
+    private final RunEventPublisher events;
     private final CatalogService catalog;
     private final BackupRunner runner;
     private final RunProperties properties;
@@ -41,18 +47,19 @@ public class RunService {
      * Begrenzt, wie viele Laeufe gleichzeitig arbeiten.
      *
      * <p>Ohne diese Grenze koennten nach einem Stillstand alle faelligen Plaene gleichzeitig
-     * starten und den Server lahmlegen -- gerade dann, wenn er ohnehin gerade erst wieder
-     * laeuft.
+     * starten und den Server lahmlegen -- gerade dann, wenn er ohnehin erst wieder hochgekommen
+     * ist.
      */
     private final Semaphore parallelRuns;
 
     /** Laufende Ausfuehrungen, damit sie sich abbrechen lassen. */
     private final Map<UUID, Thread> activeRuns = new ConcurrentHashMap<>();
 
-    RunService(RunRepository runs, RunStepRepository steps, CatalogService catalog, BackupRunner runner,
-            RunProperties properties) {
+    RunService(RunRepository runs, RunPersistence persistence, RunEventPublisher events,
+            CatalogService catalog, BackupRunner runner, RunProperties properties) {
         this.runs = runs;
-        this.steps = steps;
+        this.persistence = persistence;
+        this.events = events;
         this.catalog = catalog;
         this.runner = runner;
         this.properties = properties;
@@ -64,26 +71,23 @@ public class RunService {
      *
      * @return Kennung des Laufs, oder leer, wenn fuer diesen Plan bereits einer laeuft
      */
-    public java.util.Optional<UUID> startRun(UUID planId, RunTrigger trigger) {
-        if (runs.existsByPlanIdAndStatusIn(planId, ACTIVE)) {
+    public Optional<UUID> startRun(UUID planId, RunTrigger trigger) {
+        if (persistence.hasActiveRun(planId)) {
             // Zwei Laeufe desselben Plans wuerden sich am selben Repository gegenseitig
             // aussperren; restic laesst nur einen Schreiber zu.
             log.info("Plan {} laeuft bereits, kein zweiter Lauf gestartet", planId);
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
 
-        BackupRun run = createRun(planId, trigger);
+        BackupRun run = persistence.create(planId, trigger);
+        UUID runId = run.getId();
+
         Thread worker = Thread.ofVirtual()
-                .name("backup-run-" + run.getId())
-                .start(() -> executeRun(run.getId(), planId));
+                .name("backup-run-" + runId)
+                .start(() -> executeRun(runId, planId));
 
-        activeRuns.put(run.getId(), worker);
-        return java.util.Optional.of(run.getId());
-    }
-
-    @Transactional
-    BackupRun createRun(UUID planId, RunTrigger trigger) {
-        return runs.save(new BackupRun(planId, trigger, 1));
+        activeRuns.put(runId, worker);
+        return Optional.of(runId);
     }
 
     /** Bricht einen laufenden Lauf ab. */
@@ -99,28 +103,35 @@ public class RunService {
         try {
             acquired = parallelRuns.tryAcquire(1, TimeUnit.HOURS);
             if (!acquired) {
-                finishRun(runId, RunStatus.FAILED, "Kein freier Platz fuer weitere gleichzeitige Laeufe");
+                finishWithError(runId, RunStatus.FAILED,
+                        "Kein freier Platz fuer weitere gleichzeitige Laeufe");
                 return;
             }
 
             ExecutablePlan plan = catalog.toExecutable(planId);
 
             try (var logWriter = new RunLogWriter(Path.of(properties.logDirectory()), runId)) {
-                markRunning(runId, logWriter.path());
+                persistence.markRunning(runId, logWriter.path());
                 logWriter.append("Plan: %s".formatted(plan.planName()));
 
-                var listener = new PersistingListener(runId, logWriter);
-                List<BackupRunner.TargetOutcome> outcomes = runner.run(plan, listener);
+                List<BackupRunner.TargetOutcome> outcomes =
+                        runner.run(plan, new PersistingListener(runId, logWriter));
 
-                completeRun(runId, planId, outcomes);
+                RunPersistence.Outcome outcome = persistence.complete(runId, outcomes);
+
+                catalog.recordRunResult(planId, outcome.finishedAt(), outcome.status().name());
+                events.publish(runId, new RunEvent.Finished(outcome.status(), outcome.errorSummary()));
+                events.closeStream(runId);
+
+                log.info("Lauf {} beendet: {}", runId, outcome.status());
             }
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            finishRun(runId, RunStatus.CANCELLED, "Abgebrochen");
+            finishWithError(runId, RunStatus.CANCELLED, "Abgebrochen");
         } catch (RuntimeException e) {
             log.error("Lauf {} unerwartet gescheitert", runId, e);
-            finishRun(runId, RunStatus.FAILED, String.valueOf(e.getMessage()));
+            finishWithError(runId, RunStatus.FAILED, String.valueOf(e.getMessage()));
         } finally {
             if (acquired) {
                 parallelRuns.release();
@@ -129,51 +140,10 @@ public class RunService {
         }
     }
 
-    @Transactional
-    void markRunning(UUID runId, String logPath) {
-        BackupRun run = require(runId);
-        run.markRunning();
-        run.setLogPath(logPath);
-        runs.save(run);
-    }
-
-    @Transactional
-    void completeRun(UUID runId, UUID planId, List<BackupRunner.TargetOutcome> outcomes) {
-        BackupRun run = require(runId);
-
-        // Kennzahlen aus der ersten erfolgreichen Abschlussmeldung: Die Quelle wird einmal
-        // gelesen, die Zahlen sind fuer alle Ziele dieselben.
-        outcomes.stream()
-                .map(BackupRunner.TargetOutcome::summary)
-                .filter(java.util.Objects::nonNull)
-                .findFirst()
-                .ifPresent(summary -> run.recordMetrics(summary.totalBytesProcessed(), summary.dataAdded(),
-                        summary.filesNew(), summary.filesChanged(), summary.filesUnmodified()));
-
-        RunStatus status = run.deriveStatus();
-        run.finish(status, summariseFailures(outcomes));
-        runs.save(run);
-
-        catalog.recordRunResult(planId, run.getFinishedAt(), status.name());
-        log.info("Lauf {} beendet: {}", runId, status);
-    }
-
-    /** Fasst zusammen, was schiefging -- kurz genug fuer eine Uebersicht. */
-    private static String summariseFailures(List<BackupRunner.TargetOutcome> outcomes) {
-        List<String> failures = outcomes.stream()
-                .filter(outcome -> !outcome.successful())
-                .map(outcome -> "%s: %s".formatted(outcome.targetName(), outcome.message()))
-                .toList();
-
-        return failures.isEmpty() ? null : String.join("; ", failures);
-    }
-
-    @Transactional
-    void finishRun(UUID runId, RunStatus status, String message) {
-        runs.findById(runId).ifPresent(run -> {
-            run.finish(status, message);
-            runs.save(run);
-        });
+    private void finishWithError(UUID runId, RunStatus status, String message) {
+        persistence.finish(runId, status, message);
+        events.publish(runId, new RunEvent.Finished(status, message));
+        events.closeStream(runId);
     }
 
     // ------------------------------------------------------------------ Abfrage
@@ -185,31 +155,41 @@ public class RunService {
                 : runs.findAllByPlanIdOrderByQueuedAtDesc(planId, pageable);
     }
 
-    @Transactional(readOnly = true)
     public BackupRun findRun(UUID runId) {
-        BackupRun run = require(runId);
-        // Die Schritte werden lazy geladen; hier innerhalb der Transaktion anstossen.
-        run.getSteps().size();
-        return run;
+        return persistence.findWithSteps(runId);
     }
 
     @Transactional(readOnly = true)
     public String readLog(UUID runId) {
-        BackupRun run = require(runId);
+        BackupRun run = runs.findById(runId)
+                .orElseThrow(() -> new NotFoundException("Lauf %s nicht gefunden".formatted(runId)));
+
         return run.getLogPath() == null ? "" : RunLogWriter.read(Path.of(run.getLogPath()));
     }
 
-    private BackupRun require(UUID runId) {
-        return runs.findById(runId)
-                .orElseThrow(() -> new NotFoundException("Lauf %s nicht gefunden".formatted(runId)));
+    /**
+     * Meldet einen Zuschauer fuer die Ausgabe eines laufenden Backups an.
+     *
+     * <p>Ist der Lauf bereits beendet, wird der Datenstrom sofort geschlossen -- die
+     * Oberflaeche holt sich das Protokoll dann als Ganzes.
+     */
+    public SseEmitter streamEvents(UUID runId) {
+        BackupRun run = findRun(runId);
+        SseEmitter emitter = events.subscribe(runId, java.time.Duration.ofHours(12).toMillis());
+
+        if (run.getStatus().isFinished()) {
+            events.publish(runId, new RunEvent.Finished(run.getStatus(), run.getErrorSummary()));
+            events.closeStream(runId);
+        }
+        return emitter;
     }
 
     /**
-     * Haelt fest, was der Runner meldet.
+     * Haelt fest, was der Runner meldet, und verteilt es an die Oberflaeche.
      *
      * <p>Fortschrittsmeldungen kommen mehrfach je Sekunde und werden bewusst nicht
-     * gespeichert -- sie gehen nur ins Protokoll und spaeter an die Oberflaeche. Jede davon
-     * in die Datenbank zu schreiben, waere Schreiblast ohne Nutzen.
+     * gespeichert -- sie gehen nur ins Protokoll und an die Zuschauer. Jede davon in die
+     * Datenbank zu schreiben, waere Schreiblast ohne Nutzen.
      */
     private final class PersistingListener implements RunProgressListener {
 
@@ -226,42 +206,32 @@ public class RunService {
                 List<String> redactedCommand) {
             logWriter.appendSection(description);
             logWriter.append("$ " + String.join(" ", redactedCommand));
-            return addStep(runId, kind, targetId, description, image, redactedCommand);
+
+            UUID stepId = persistence.addStep(runId, kind, targetId, description, image, redactedCommand);
+            events.publish(runId, new RunEvent.Step(stepId, kind, StepStatus.RUNNING, description));
+            return stepId;
         }
 
         @Override
         public void stepFinished(UUID stepId, StepStatus status, Integer exitCode, String message) {
             logWriter.append("→ %s%s".formatted(status,
                     exitCode == null ? "" : " (Rueckgabewert %d)".formatted(exitCode)));
-            RunService.this.stepFinished(stepId, status, exitCode, message);
+
+            persistence.finishStep(stepId, status, exitCode, message);
+            events.publish(runId, new RunEvent.Step(stepId, null, status, message));
         }
 
         @Override
         public void progress(UUID stepId, ResticMessage.Progress progress) {
-            // Absichtlich ohne Datenbankzugriff.
+            events.publish(runId, new RunEvent.Progress(stepId, progress.percent(),
+                    progress.filesDone(), progress.totalFiles(), progress.bytesDone(),
+                    progress.totalBytes(), progress.secondsRemaining()));
         }
 
         @Override
         public void logLine(String line) {
             logWriter.append(line);
+            events.publish(runId, new RunEvent.Log(line));
         }
-    }
-
-    @Transactional
-    UUID addStep(UUID runId, StepKind kind, UUID targetId, String description, String image,
-            List<String> redactedCommand) {
-        BackupRun run = require(runId);
-        RunStep step = run.addStep(kind, targetId, description);
-        step.markRunning(image, redactedCommand, null);
-        runs.save(run);
-        return step.getId();
-    }
-
-    @Transactional
-    void stepFinished(UUID stepId, StepStatus status, Integer exitCode, String message) {
-        steps.findById(stepId).ifPresent(step -> {
-            step.finish(status, exitCode, message);
-            steps.save(step);
-        });
     }
 }

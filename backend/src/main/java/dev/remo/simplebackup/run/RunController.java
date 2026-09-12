@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/runs")
@@ -42,6 +43,22 @@ class RunController {
     @GetMapping("/{id}")
     RunViews.RunDetail get(@PathVariable UUID id) {
         return RunViews.RunDetail.of(runService.findRun(id));
+    }
+
+    /**
+     * Verfolgt einen laufenden Lauf in Echtzeit.
+     *
+     * <p>Server-Sent Events: Der Datenstrom geht nur in eine Richtung, und Wiederverbindung
+     * bringt der Browser von selbst mit. Ein WebSocket waere mehr Technik fuer dieselbe
+     * Aufgabe.
+     *
+     * <p>Der vorgelagerte nginx muss fuer diesen Pfad die Pufferung abschalten -- sonst
+     * erschiene die Ausgabe erst am Ende des Laufs, also genau dann nicht, wenn man sie
+     * braucht.
+     */
+    @GetMapping(value = "/{id}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    SseEmitter stream(@PathVariable UUID id) {
+        return runService.streamEvents(id);
     }
 
     /** Das Protokoll als Klartext -- es ist bereits von Geheimnissen bereinigt. */

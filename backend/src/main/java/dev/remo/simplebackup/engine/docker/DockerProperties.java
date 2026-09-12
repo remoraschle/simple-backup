@@ -1,6 +1,7 @@
 package dev.remo.simplebackup.engine.docker;
 
 import java.time.Duration;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -14,6 +15,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param runnerImage    Standard-Runner-Image, immer mit festem Tag
  * @param runnerUser     UID:GID im Runner. Konfigurierbar, weil rootless Docker die
  *                       Kennungen abbildet und eine feste Annahme dort falsch waere.
+ * @param mounts         Ausdrueckliche Einhaengungen in der Schreibweise
+ *                       {@code /host/pfad:/container/pfad[:ro]}.
+ *
+ *                       <p>Normalerweise leer: Die Einhaengungen kommen aus der eigenen
+ *                       Mount-Tabelle, damit kein zweiter Katalog gepflegt werden muss.
+ *                       Gebraucht wird die Angabe dort, wo es keine gibt -- in der lokalen
+ *                       Entwicklung ausserhalb eines Containers waere sonst keine einzige
+ *                       Quelle anlegbar.
  */
 @ConfigurationProperties(prefix = "simplebackup.docker")
 public record DockerProperties(
@@ -22,9 +31,11 @@ public record DockerProperties(
         Duration connectTimeout,
         Duration requestTimeout,
         String runnerImage,
-        String runnerUser) {
+        String runnerUser,
+        List<String> mounts) {
 
     public DockerProperties {
+        mounts = mounts == null ? List.of() : List.copyOf(mounts);
         host = host == null || host.isBlank() ? "http://localhost:2375" : normalizeHost(host);
         apiVersion = apiVersion == null || apiVersion.isBlank() ? "v1.51" : apiVersion;
         connectTimeout = connectTimeout == null ? Duration.ofSeconds(5) : connectTimeout;

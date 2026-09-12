@@ -1,6 +1,7 @@
 package dev.remo.simplebackup.engine.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.remo.simplebackup.engine.VolumeMount;
 import java.util.List;
@@ -59,6 +60,32 @@ class SelfInspectorTest {
     @DisplayName("Eine fehlende Mount-Tabelle ergibt eine leere Liste")
     void handlesMissingMounts() {
         assertThat(SelfInspector.toVolumeMounts(null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Ausdrueckliche Einhaengungen werden im Docker-Format gelesen")
+    void parsesExplicitMounts() {
+        // Der Ausweg dort, wo es keine eigene Mount-Tabelle gibt -- etwa in der lokalen
+        // Entwicklung ausserhalb eines Containers.
+        var mounts = SelfInspector.parseMounts(List.of(
+                "/srv/fotos:/sources/fotos:ro",
+                "/mnt/nas:/mnt/nas",
+                "staging:/var/lib/simple-backup/staging"));
+
+        assertThat(mounts).hasSize(3);
+        assertThat(mounts.get(0).readOnly()).isTrue();
+        assertThat(mounts.get(1).readOnly()).isFalse();
+        assertThat(mounts.get(2).namedVolume()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Eine fehlerhafte Einhaengung wird beim Start abgelehnt")
+    void rejectsMalformedMount() {
+        // Stillschweigend uebergangen faellt sie erst auf, wenn sich eine Quelle nicht
+        // anlegen laesst -- und dann sucht man an der falschen Stelle.
+        assertThatThrownBy(() -> SelfInspector.parseMounts(List.of("/nur-ein-pfad")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("keine gueltige Einhaengung");
     }
 
     @Test

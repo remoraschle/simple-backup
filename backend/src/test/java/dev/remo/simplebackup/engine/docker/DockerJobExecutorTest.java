@@ -40,7 +40,7 @@ class DockerJobExecutorTest {
         api.respondRaw("/containers/" + CONTAINER_ID + "/logs", 200, new byte[0]);
 
         var properties = new DockerProperties(api.baseUrl(), "v1.51", Duration.ofSeconds(2),
-                Duration.ofSeconds(5), "runner:1.0", "1000:1000");
+                Duration.ofSeconds(5), "runner:1.0", "1000:1000", null);
         executor = new DockerJobExecutor(
                 new DockerApiClient(properties, new ObjectMapper()), properties, new SecretRedactor());
         logLines = new CopyOnWriteArrayList<>();

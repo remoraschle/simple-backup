@@ -19,7 +19,7 @@ class ContainerReaperTest {
     void setUp() {
         api = new FakeDockerApi();
         var properties = new DockerProperties(api.baseUrl(), "v1.51", Duration.ofSeconds(2),
-                Duration.ofSeconds(5), null, null);
+                Duration.ofSeconds(5), null, null, null);
         reaper = new ContainerReaper(new DockerApiClient(properties, new ObjectMapper()));
     }
 
