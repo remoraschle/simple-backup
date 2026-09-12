@@ -1,5 +1,6 @@
 package dev.remo.simplebackup.engine.restic;
 
+import dev.remo.simplebackup.shared.RetentionRule;
 import java.util.ArrayList;
 import java.util.List;
 

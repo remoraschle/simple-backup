@@ -1,4 +1,4 @@
-package dev.remo.simplebackup.engine.restic;
+package dev.remo.simplebackup.shared;
 
 /**
  * Grossvater-Vater-Sohn-Regel fuer die Aufbewahrung.

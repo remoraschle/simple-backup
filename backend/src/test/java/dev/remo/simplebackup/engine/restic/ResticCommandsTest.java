@@ -1,5 +1,6 @@
 package dev.remo.simplebackup.engine.restic;
 
+import dev.remo.simplebackup.shared.RetentionRule;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
