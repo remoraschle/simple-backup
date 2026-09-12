@@ -1,6 +1,7 @@
-package dev.remo.simplebackup.engine.restic;
+package dev.remo.simplebackup.restic;
 
 import java.util.Optional;
+import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -15,6 +16,7 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Der Rueckgabewert des Prozesses bleibt die verbindliche Auskunft ueber Erfolg oder
  * Misserfolg; diese Auswertung dient der Anzeige und dem Protokoll.
  */
+@Component
 public class ResticOutputParser {
 
     private final ObjectMapper objectMapper;

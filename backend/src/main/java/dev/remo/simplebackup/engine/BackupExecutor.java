@@ -21,6 +21,25 @@ public interface BackupExecutor {
     RunningExecution start(ExecutionRequest request, LogSink logSink);
 
     /**
+     * Die Umgebung, in der Schritte standardmaessig laufen.
+     *
+     * <p>Der Aufrufer soll nicht wissen muessen, ob dahinter ein Container-Image oder etwas
+     * anderes steht -- er baut damit nur seine Anfrage.
+     */
+    String defaultEnvironment();
+
+    /**
+     * Raeumt nach einem Neustart auf.
+     *
+     * <p>Wer ausfuehrt, raeumt auch auf: Der Aufrufer sagt nur, welche Schritte er noch
+     * kennt; was davon uebrig ist und was entsorgt werden muss, weiss die Ausfuehrung.
+     *
+     * @param knownExecutionIds Schritte, die die Anwendung noch kennt
+     * @return die Kennungen der Ausfuehrungen, die noch laufen
+     */
+    java.util.Set<String> reapOrphans(java.util.Set<String> knownExecutionIds);
+
+    /**
      * Sucht eine bereits laufende Ausfuehrung anhand der Kennung aus der Anfrage.
      *
      * <p>Das ist der Kern des Wiederanhaengens: Startet das Backend neu, laufen die

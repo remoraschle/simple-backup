@@ -1,4 +1,4 @@
-package dev.remo.simplebackup.engine.restic;
+package dev.remo.simplebackup.restic;
 
 /**
  * Eine Meldung aus der JSON-Ausgabe von restic.

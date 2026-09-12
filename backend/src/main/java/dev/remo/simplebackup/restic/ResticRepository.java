@@ -1,4 +1,4 @@
-package dev.remo.simplebackup.engine.restic;
+package dev.remo.simplebackup.restic;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

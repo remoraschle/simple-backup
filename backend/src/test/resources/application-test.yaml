@@ -4,6 +4,10 @@ spring:
       ddl-auto: validate
 
 simplebackup:
+  run:
+    log-directory: ${java.io.tmpdir:/tmp}/simple-backup-test-logs
+    staging-directory: ${java.io.tmpdir:/tmp}/simple-backup-test-staging
+
   engine:
     # Tests, die fuer jeden Fall einen Container hochziehen, laufen zu langsam, um sie oft
     # auszufuehren -- und Tests, die man selten ausfuehrt, findet niemand nuetzlich.

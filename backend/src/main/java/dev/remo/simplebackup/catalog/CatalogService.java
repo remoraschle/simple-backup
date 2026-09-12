@@ -296,6 +296,87 @@ public class CatalogService {
         policies.delete(policy);
     }
 
+    // ------------------------------------------------------ Fuer die Ausfuehrung
+
+    /**
+     * Wandelt einen Plan in ein Wertobjekt um, mit dem die Ausfuehrung arbeiten kann.
+     *
+     * <p>Ohne Entitaeten und ohne offene Transaktion: Ein Backup laeuft Stunden.
+     */
+    @Transactional(readOnly = true)
+    public ExecutablePlan toExecutable(UUID planId) {
+        BackupPlan plan = requirePlan(planId);
+
+        List<ExecutableTarget> executableTargets = plan.getTargets().stream()
+                .map(target -> new ExecutableTarget(target.getId(), target.getName(), target.getMode(),
+                        objectMapper.readValue(target.getConfig(), TargetConfig.class), target.isEnabled()))
+                .toList();
+
+        return new ExecutablePlan(
+                plan.getId(),
+                plan.getName(),
+                plan.resticHost(),
+                plan.resticTag(),
+                objectMapper.readValue(plan.getSource().getConfig(), SourceConfig.class),
+                executableTargets,
+                java.time.Duration.ofMinutes(plan.getTimeoutMinutes()),
+                plan.getRetentionPolicy() == null ? null : plan.getRetentionPolicy().toRule());
+    }
+
+    /**
+     * Uebernimmt faellige Plaene zur Ausfuehrung.
+     *
+     * <p>Die Abfrage sperrt die gefundenen Zeilen und ueberspringt bereits gesperrte. Mehrere
+     * Instanzen koennen damit gleichzeitig suchen, ohne sich zu blockieren, und keine zwei
+     * uebernehmen denselben Plan.
+     *
+     * <p>Der naechste Termin wird sofort gesetzt, noch innerhalb derselben Transaktion --
+     * sonst faende der naechste Durchgang denselben Plan erneut.
+     */
+    public List<UUID> claimDuePlans(int limit) {
+        Instant now = Instant.now();
+        List<BackupPlan> due = plans.findDuePlansForUpdate(now, limit);
+
+        for (BackupPlan plan : due) {
+            nextRunCalculator.nextAfter(plan.getCronExpression(), plan.getTimezone(), now)
+                    .ifPresentOrElse(plan::scheduleNext, () -> plan.scheduleNext(null));
+            plans.save(plan);
+        }
+        return due.stream().map(BackupPlan::getId).toList();
+    }
+
+    /** Haelt das Ergebnis eines Laufs am Plan fest, fuer die Uebersicht. */
+    public void recordRunResult(UUID planId, Instant at, String status) {
+        BackupPlan plan = requirePlan(planId);
+        plan.recordRun(at, status);
+        plans.save(plan);
+    }
+
+    /**
+     * Setzt den naechsten Termin nach einem Stillstand neu.
+     *
+     * <p>Wird beim Start aufgerufen: War der Server laenger aus, liegt der gespeicherte
+     * Termin in der Vergangenheit. Je nach Einstellung wird ein Lauf nachgeholt oder auf den
+     * naechsten regulaeren Termin gewartet.
+     */
+    public int rescheduleAfterDowntime() {
+        Instant now = Instant.now();
+        int adjusted = 0;
+
+        for (BackupPlan plan : plans.findAll()) {
+            if (!plan.isEnabled() || plan.getNextRunAt() == null || !plan.getNextRunAt().isBefore(now)) {
+                continue;
+            }
+            var next = nextRunCalculator.resolveAfterDowntime(plan.getCronExpression(), plan.getTimezone(),
+                    plan.getNextRunAt(), now, plan.getMissedRunPolicy());
+
+            plan.scheduleNext(next.orElse(null));
+            plans.save(plan);
+            adjusted++;
+        }
+        return adjusted;
+    }
+
     // ------------------------------------------------------------ Hilfsmittel
 
     BackupSource requireSource(UUID id) {

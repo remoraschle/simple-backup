@@ -81,6 +81,19 @@ public class DockerJobExecutor implements BackupExecutor {
     }
 
     @Override
+    public java.util.Set<String> reapOrphans(java.util.Set<String> knownExecutionIds) {
+        return new ContainerReaper(client).reap(knownExecutionIds).stream()
+                .filter(AdoptableContainer::running)
+                .map(AdoptableContainer::executionId)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    @Override
+    public String defaultEnvironment() {
+        return properties.runnerImage();
+    }
+
+    @Override
     public Optional<RunningExecution> reattach(String executionId, LogSink logSink) {
         var containers = client.listByLabel(DockerLabels.EXECUTION_ID, executionId);
 

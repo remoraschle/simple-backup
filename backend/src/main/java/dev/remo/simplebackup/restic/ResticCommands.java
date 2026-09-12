@@ -1,4 +1,4 @@
-package dev.remo.simplebackup.engine.restic;
+package dev.remo.simplebackup.restic;
 
 import dev.remo.simplebackup.shared.RetentionRule;
 import java.util.ArrayList;
@@ -78,6 +78,16 @@ public final class ResticCommands {
         command.add("--");
         command.addAll(paths);
         return List.copyOf(command);
+    }
+
+    /**
+     * Liest die Konfiguration des Repositories.
+     *
+     * <p>Der guenstigste Weg festzustellen, ob ein Repository bereits angelegt ist: Der
+     * Rueckgabewert sagt es, ohne dass eine Ausgabe gedeutet werden muesste.
+     */
+    public static List<String> catConfig() {
+        return List.of(RESTIC, "cat", "config");
     }
 
     /** Listet Snapshots. Ohne Filter alle, mit Filter nur die des jeweiligen Plans. */

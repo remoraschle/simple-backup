@@ -79,6 +79,18 @@ public class LocalProcessExecutor implements BackupExecutor {
         }
     }
 
+    /** Kindprozesse hinterlassen nichts, was aufzuraeumen waere: Sie sterben mit dem Backend. */
+    @Override
+    public java.util.Set<String> reapOrphans(java.util.Set<String> knownExecutionIds) {
+        return java.util.Set.of();
+    }
+
+    /** Ohne Container gibt es keine Umgebung; das Feld bleibt nur der Vollstaendigkeit halber gefuellt. */
+    @Override
+    public String defaultEnvironment() {
+        return "kindprozess";
+    }
+
     /**
      * Liefert immer leer: Kindprozesse ueberleben den Neustart des Backends nicht.
      *

@@ -87,6 +87,15 @@ simplebackup:
     # Nur noetig, wenn in der Compose-Datei ein eigener hostname gesetzt wurde.
     self-container-id: ${SIMPLEBACKUP_SELF_CONTAINER_ID:}
 
+  run:
+    log-directory: ${SIMPLEBACKUP_LOG_DIR:/var/lib/simple-backup/logs}
+    staging-directory: ${SIMPLEBACKUP_STAGING_DIR:/var/lib/simple-backup/staging}
+    log-retention: 90d
+    # Ohne diese Grenze koennten nach einem Stillstand alle faelligen Plaene gleichzeitig
+    # starten -- gerade dann, wenn der Server ohnehin erst wieder hochgekommen ist.
+    max-parallel-runs: ${SIMPLEBACKUP_MAX_PARALLEL_RUNS:2}
+    scheduler-poll-interval: 30s
+
   secrets:
     # Genau eine der beiden Quellen muss gesetzt sein. Die Datei-Variante ist
     # fuer Docker Secrets gedacht und der Umgebungsvariablen vorzuziehen.
