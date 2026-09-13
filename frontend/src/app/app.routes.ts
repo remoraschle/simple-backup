@@ -44,6 +44,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/runs/run-detail').then((m) => m.RunDetail),
       },
       {
+        path: 'wiederherstellen',
+        title: 'Wiederherstellen',
+        loadComponent: () => import('./features/restore/restore').then((m) => m.RestorePage),
+      },
+      {
         path: 'passwort',
         title: 'Passwort ändern',
         loadComponent: () =>

@@ -10,7 +10,7 @@ wiederherstellbar.
 
 ## Status
 
-**M0–M3 abgeschlossen.** Das Werkzeug sichert und meldet sich, wenn etwas nicht stimmt:
+**M0–M4 abgeschlossen.** Das Werkzeug sichert und meldet sich, wenn etwas nicht stimmt:
 Pläne mit mehreren Zielen, Zeitplanung, Ausführung in Containern, Lauf-Historie mit
 Teilerfolg und Live-Protokoll, vollständige Oberfläche. Dazu Benachrichtigungen über
 Pushover und Webhook, Aufbewahrung nach Großvater-Vater-Sohn und ein Totmannschalter, der
@@ -20,8 +20,13 @@ Fehlschlag, denn ein ausgebliebener Lauf meldet sich nie von selbst.
 End-to-End-Tests sichern mit echtem restic, stellen die Dateien wieder her und belegen, dass
 die Aufbewahrungsregel eines Plans die Snapshots anderer Pläne unberührt lässt.
 
-Als Nächstes M4: Wiederherstellung über die Oberfläche, Snapshot-Browser und automatischer
-Restore-Test.
+Wiederherstellen geht über die Oberfläche: Stand wählen, im Snapshot blättern, ganz oder in
+Teilen zurückholen, einzelne Dateien herunterladen. Dazu `restic check` und eine Stichprobe,
+die eine echte Datei zurückholt und mit dem Original vergleicht — beides sonntags nachts auch
+von selbst, denn eine Prüfung, die man von Hand anstoßen muss, wird genau einmal angestoßen.
+
+Als Nächstes M5–M7: weitere Quellen (PostgreSQL, GitHub, S3, SFTP), der Spiegel-Modus mit
+rsync und die Kür (Metriken, Konfig-Export, Blockgeräte, OIDC).
 
 ## Dokumentation
 

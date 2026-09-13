@@ -43,6 +43,7 @@ export class Shell {
     { path: '/quellen', label: 'Quellen', icon: 'folder_open' },
     { path: '/ziele', label: 'Ziele', icon: 'save' },
     { path: '/laeufe', label: 'Läufe', icon: 'history' },
+    { path: '/wiederherstellen', label: 'Wiederherstellen', icon: 'restore' },
     { path: '/einstellungen', label: 'Einstellungen', icon: 'settings' },
   ];
 

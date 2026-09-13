@@ -1,0 +1,211 @@
+<sb-page-header
+  title="Wiederherstellen"
+  subtitle="Ziel wählen, Stand wählen, hineinschauen, zurückholen."
+/>
+
+<div class="grid gap-6 lg:grid-cols-[340px_1fr]">
+  <div class="flex flex-col gap-4">
+    <mat-form-field>
+      <mat-label>Ziel</mat-label>
+      <mat-select (valueChange)="targetChanged($event)">
+        @for (target of targets(); track target.id) {
+          <mat-option [value]="target.id">{{ target.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    @if (selectedTargetId()) {
+      <div class="flex flex-wrap gap-2">
+        <button matButton="outlined" (click)="refresh()" [disabled]="busy()">
+          <mat-icon>sync</mat-icon>
+          Stände abgleichen
+        </button>
+        <button
+          matButton="outlined"
+          (click)="check()"
+          [disabled]="busy()"
+          matTooltip="Prüft die Struktur und liest eine Stichprobe der Daten"
+        >
+          <mat-icon>fact_check</mat-icon>
+          Prüfen
+        </button>
+        <button
+          matButton="outlined"
+          (click)="verify()"
+          [disabled]="busy()"
+          matTooltip="Holt eine echte Datei zurück und vergleicht sie mit dem Original"
+        >
+          <mat-icon>restore_page</mat-icon>
+          Stichprobe
+        </button>
+      </div>
+
+      @if (busy()) {
+        <mat-progress-bar mode="indeterminate" />
+      }
+
+      <h2 class="mt-2 mb-0 text-lg font-medium">Stände</h2>
+
+      @if (snapshots().length === 0) {
+        <p class="m-0 text-sm text-on-surface-variant">
+          Für dieses Ziel ist noch kein Stand bekannt. „Stände abgleichen“ fragt das Repository
+          selbst — dort stehen auch Sicherungen, die ein anderes Werkzeug angelegt hat.
+        </p>
+      } @else {
+        <div class="flex flex-col gap-1">
+          @for (snapshot of snapshots(); track snapshot.id) {
+            <button
+              matButton
+              class="justify-start text-left"
+              [class.bg-primary]="selectedSnapshot()?.id === snapshot.id"
+              [class.text-on-primary]="selectedSnapshot()?.id === snapshot.id"
+              (click)="chooseSnapshot(snapshot)"
+            >
+              <span class="flex flex-col items-start">
+                <span>{{ relative(snapshot.snapshotTime) }}</span>
+                <span class="font-mono text-xs opacity-75">{{ snapshot.shortId }}</span>
+              </span>
+            </button>
+          }
+        </div>
+      }
+    }
+  </div>
+
+  <div>
+    @if (!selectedSnapshot()) {
+      <sb-empty-state
+        icon="restore"
+        title="Noch kein Stand gewählt"
+        description="Links ein Ziel und einen Stand wählen. Danach lässt sich der Inhalt
+                     durchblättern und ganz oder in Teilen zurückholen."
+      />
+    } @else {
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="m-0 text-lg font-medium">Inhalt</h2>
+          <p class="mt-1 mb-0 text-sm text-on-surface-variant">
+            @if (selectedPaths().size === 0) {
+              Ohne Auswahl wird der vollständige Stand zurückgeholt.
+            } @else {
+              {{ selectedPaths().size }} ausgewählt.
+            }
+          </p>
+        </div>
+
+        <button matButton="filled" (click)="startRestore()" [disabled]="loadingTree()">
+          <mat-icon>download</mat-icon>
+          Wiederherstellen
+        </button>
+      </div>
+
+      @if (loadingTree()) {
+        <mat-progress-bar mode="indeterminate" />
+      }
+
+      <div class="overflow-x-auto rounded-lg border border-outline-variant">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-outline-variant text-left">
+              <th class="w-10 p-3"></th>
+              <th class="p-3 font-medium">Name</th>
+              <th class="p-3 font-medium">Größe</th>
+              <th class="w-20 p-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (node of rows(); track node.path) {
+              <tr class="border-b border-outline-variant/50 last:border-0">
+                <td class="p-3">
+                  <mat-checkbox
+                    [checked]="isSelected(node)"
+                    (change)="select(node, $event.checked)"
+                    [attr.aria-label]="node.path + ' auswählen'"
+                  />
+                </td>
+                <td class="p-3">
+                  <span class="flex items-center gap-1" [style.padding-left.px]="node.level * 20">
+                    @if (node.directory) {
+                      <button
+                        matIconButton
+                        class="shrink-0"
+                        (click)="toggle(node)"
+                        [attr.aria-label]="node.expanded ? 'Zuklappen' : 'Aufklappen'"
+                      >
+                        <mat-icon>
+                          {{
+                            node.loading
+                              ? 'hourglass_empty'
+                              : node.expanded
+                                ? 'expand_more'
+                                : 'chevron_right'
+                          }}
+                        </mat-icon>
+                      </button>
+                      <mat-icon class="shrink-0 text-on-surface-variant">folder</mat-icon>
+                    } @else {
+                      <span class="inline-block w-10 shrink-0"></span>
+                      <mat-icon class="shrink-0 text-on-surface-variant">description</mat-icon>
+                    }
+                    <span class="truncate" [title]="node.path">{{ node.name }}</span>
+                  </span>
+                </td>
+                <td class="p-3 whitespace-nowrap text-on-surface-variant">
+                  {{ node.directory ? '–' : bytes(node.sizeBytes) }}
+                </td>
+                <td class="p-3 text-right">
+                  @if (!node.directory) {
+                    <a
+                      matIconButton
+                      [href]="downloadUrl(node)"
+                      matTooltip="Diese Datei herunterladen"
+                      [attr.aria-label]="node.name + ' herunterladen'"
+                    >
+                      <mat-icon>file_download</mat-icon>
+                    </a>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (activeRestore(); as restore) {
+      <mat-card class="mt-6">
+        <mat-card-content class="py-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="font-medium">
+              @switch (restore.state) {
+                @case ('RUNNING') {
+                  Wird zurückgeholt …
+                }
+                @case ('SUCCEEDED') {
+                  Zurückgeholt
+                }
+                @default {
+                  Fehlgeschlagen
+                }
+              }
+            </span>
+            <span class="text-on-surface-variant">nach {{ restore.targetPath }}</span>
+          </div>
+
+          @if (restore.state === 'RUNNING') {
+            <mat-progress-bar class="mt-3" mode="indeterminate" />
+          }
+          @if (restore.message) {
+            <p class="mt-3 mb-0 text-sm text-on-surface-variant">{{ restore.message }}</p>
+          }
+          @if (restoreLog().length) {
+            <pre
+              class="mt-3 mb-0 max-h-64 overflow-auto rounded-lg border border-outline-variant bg-surface-container p-3 text-xs"
+            >@for (line of restoreLog(); track $index) {{{ line }}
+}</pre>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+  </div>
+</div>

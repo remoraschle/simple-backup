@@ -233,6 +233,59 @@ export interface OutboxEntry {
   readonly sentAt: string | null;
 }
 
+export interface Snapshot {
+  readonly id: string;
+  readonly runId: string | null;
+  readonly planId: string;
+  readonly targetId: string;
+  readonly externalId: string;
+  readonly shortId: string;
+  readonly sizeBytes: number | null;
+  readonly snapshotTime: string;
+  /** Von der Aufbewahrung ausgenommen, etwa der Stand vor einer Migration. */
+  readonly pinned: boolean;
+}
+
+export interface SnapshotEntry {
+  readonly path: string;
+  readonly name: string;
+  readonly directory: boolean;
+  readonly sizeBytes: number | null;
+  readonly modifiedAt: string | null;
+}
+
+export interface BrowseResult {
+  readonly snapshotId: string;
+  readonly path: string;
+  readonly entries: SnapshotEntry[];
+}
+
+export type RestoreState = 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+
+export interface Restore {
+  readonly id: string;
+  readonly snapshotId: string;
+  readonly targetPath: string;
+  readonly includes: string[];
+  readonly state: RestoreState;
+  readonly message: string | null;
+  readonly startedAt: string;
+  readonly finishedAt: string | null;
+}
+
+export interface CheckOutcome {
+  readonly targetId: string;
+  readonly targetName: string;
+  readonly successful: boolean;
+  readonly message: string;
+  readonly checkedAt: string;
+}
+
+/** Ergebnis der Stichprobe: eine echte Datei zurückgeholt und verglichen. */
+export interface RestoreTestOutcome extends CheckOutcome {
+  readonly path: string | null;
+}
+
 export interface Page<T> {
   readonly content: T[];
   readonly totalElements: number;
