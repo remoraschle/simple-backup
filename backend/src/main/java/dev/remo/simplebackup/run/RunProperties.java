@@ -18,6 +18,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *                            schluege der Waechter bei einem Lauf an, der sich um Minuten
  *                            verspaetet -- und wer stuendlich falschen Alarm bekommt, schaltet
  *                            ihn ab.
+ * @param acquireTimeout      Zeitlimit fuer das Beschaffen der Daten -- Dump, Klon, Abzug
+ * @param postgresImage       Vorlage fuer das Image mit den PostgreSQL-Werkzeugen. Die
+ *                            Hauptversion wird eingesetzt, weil pg_dump sich weigert, eine
+ *                            neuere Datenbank zu lesen als es selbst kennt.
+ * @param gitImage            Image mit git, fuer das Spiegeln von Repositories
+ * @param githubApiUrl        Adresse der GitHub-API. Abweichend nur fuer Tests und fuer
+ *                            GitHub Enterprise.
  */
 @ConfigurationProperties(prefix = "simplebackup.run")
 public record RunProperties(
@@ -28,7 +35,11 @@ public record RunProperties(
         String stagingDirectory,
         Duration pruneTimeout,
         Duration watchdogInterval,
-        Duration watchdogGrace) {
+        Duration watchdogGrace,
+        Duration acquireTimeout,
+        String postgresImage,
+        String gitImage,
+        String githubApiUrl) {
 
     public RunProperties {
         logDirectory = orDefault(logDirectory, "/var/lib/simple-backup/logs");
@@ -39,6 +50,10 @@ public record RunProperties(
         pruneTimeout = pruneTimeout == null ? Duration.ofHours(4) : pruneTimeout;
         watchdogInterval = watchdogInterval == null ? Duration.ofMinutes(15) : watchdogInterval;
         watchdogGrace = watchdogGrace == null ? Duration.ofMinutes(30) : watchdogGrace;
+        acquireTimeout = acquireTimeout == null ? Duration.ofHours(4) : acquireTimeout;
+        postgresImage = orDefault(postgresImage, "postgres:%d-alpine");
+        gitImage = orDefault(gitImage, "alpine/git:latest");
+        githubApiUrl = orDefault(githubApiUrl, "https://api.github.com");
     }
 
     private static String orDefault(String value, String fallback) {

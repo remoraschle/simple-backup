@@ -51,7 +51,28 @@ export interface LocalPathSourceConfig {
   readonly oneFileSystem: boolean;
 }
 
-export type SourceConfig = LocalPathSourceConfig;
+export interface PostgresSourceConfig {
+  readonly type: 'POSTGRES';
+  readonly host: string;
+  readonly port: number;
+  /** Bestimmt, welches pg_dump verwendet wird. */
+  readonly majorVersion: number;
+  readonly databases: string[];
+  readonly username: string;
+  readonly credentialId: string;
+  readonly includeGlobals: boolean;
+}
+
+export interface GitHubSourceConfig {
+  readonly type: 'GITHUB';
+  readonly owner: string;
+  readonly repositories: string[];
+  readonly includeForks: boolean;
+  readonly includeMetadata: boolean;
+  readonly credentialId: string;
+}
+
+export type SourceConfig = LocalPathSourceConfig | PostgresSourceConfig | GitHubSourceConfig;
 
 export interface LocalPathTargetConfig {
   readonly type: 'LOCAL_PATH';

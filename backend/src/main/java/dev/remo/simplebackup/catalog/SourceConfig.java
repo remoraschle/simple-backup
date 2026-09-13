@@ -2,8 +2,10 @@ package dev.remo.simplebackup.catalog;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Typisierte Konfiguration einer Quelle.
@@ -13,7 +15,10 @@ import java.util.List;
  * naechtlichen Lauf.
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
-@JsonSubTypes({@JsonSubTypes.Type(value = SourceConfig.LocalPath.class, name = "LOCAL_PATH")})
+@JsonSubTypes({
+        @JsonSubTypes.Type(value = SourceConfig.LocalPath.class, name = "LOCAL_PATH"),
+        @JsonSubTypes.Type(value = SourceConfig.Postgres.class, name = "POSTGRES"),
+        @JsonSubTypes.Type(value = SourceConfig.GitHub.class, name = "GITHUB")})
 public sealed interface SourceConfig {
 
     SourceType type();
@@ -45,6 +50,90 @@ public sealed interface SourceConfig {
         @Override
         public SourceType type() {
             return SourceType.LOCAL_PATH;
+        }
+    }
+
+    /**
+     * Eine PostgreSQL-Datenbank.
+     *
+     * <p>Gesichert wird ein Dump, kein Dateiabbild: Die Dateien einer laufenden Datenbank zu
+     * kopieren ergibt einen Stand, den niemand einspielen kann.
+     *
+     * @param majorVersion Hauptversion des Servers. Bestimmt, welches {@code pg_dump}
+     *                     verwendet wird -- ein aelteres weigert sich, eine neuere Datenbank
+     *                     zu lesen, und ein Dump aus dem falschen Werkzeug faellt erst beim
+     *                     Einspielen auf.
+     * @param databases    zu sichernde Datenbanken. Leer bedeutet alle ausser den Vorlagen.
+     * @param includeGlobals ob Rollen und Tablespaces mitgesichert werden. Ohne sie laesst
+     *                       sich ein Dump zwar einspielen, aber niemand darf hinterher
+     *                       darauf zugreifen.
+     * @param credentialId Verweis auf das Passwort in der verschluesselten Ablage
+     */
+    record Postgres(
+            @NotBlank String host,
+            int port,
+            Integer majorVersion,
+            List<String> databases,
+            @NotBlank String username,
+            UUID credentialId,
+            boolean includeGlobals) implements SourceConfig {
+
+        public Postgres {
+            port = port <= 0 ? 5432 : port;
+            majorVersion = majorVersion == null ? 18 : majorVersion;
+            databases = databases == null ? List.of() : List.copyOf(databases);
+
+            if (majorVersion < 9 || majorVersion > 99) {
+                throw new IllegalArgumentException("Unplausible Hauptversion: " + majorVersion);
+            }
+            if (credentialId == null) {
+                throw new IllegalArgumentException("Ohne hinterlegtes Passwort geht kein Dump");
+            }
+            for (String database : databases) {
+                if (database == null || database.isBlank()) {
+                    throw new IllegalArgumentException("Ein Datenbankname darf nicht leer sein");
+                }
+            }
+        }
+
+        @Override
+        public SourceType type() {
+            return SourceType.POSTGRES;
+        }
+    }
+
+    /**
+     * Repositories bei GitHub.
+     *
+     * <p>Gespiegelt statt ausgecheckt: Ein Mirror enthaelt alle Branches und Tags und laesst
+     * sich ohne GitHub wieder auspacken. Dazu kommen die Metadaten -- Issues und Releases
+     * liegen nicht im Git-Repository und waeren sonst verloren.
+     *
+     * @param owner        Benutzer oder Organisation
+     * @param includeForks ob geforkte Repositories mitgesichert werden. Meist nicht: Ihr
+     *                     Inhalt liegt anderswo ohnehin.
+     * @param repositories nur diese Repositories, leer fuer alle des Eigentuemers
+     * @param credentialId Verweis auf den Token in der verschluesselten Ablage
+     */
+    record GitHub(
+            @NotBlank String owner,
+            List<String> repositories,
+            boolean includeForks,
+            boolean includeMetadata,
+            UUID credentialId) implements SourceConfig {
+
+        public GitHub {
+            repositories = repositories == null ? List.of() : List.copyOf(repositories);
+
+            if (credentialId == null) {
+                throw new IllegalArgumentException(
+                        "Ohne Token kommt man auch an oeffentliche Repositories nur begrenzt heran");
+            }
+        }
+
+        @Override
+        public SourceType type() {
+            return SourceType.GITHUB;
         }
     }
 }

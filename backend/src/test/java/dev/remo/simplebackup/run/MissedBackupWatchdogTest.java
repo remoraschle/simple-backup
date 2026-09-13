@@ -45,7 +45,8 @@ class MissedBackupWatchdogTest {
         notifications = Mockito.mock(NotificationService.class);
 
         watchdog = new MissedBackupWatchdog(catalog, runs, notifications,
-                new RunProperties(null, null, 2, null, null, null, null, Duration.ofMinutes(30)),
+                new RunProperties(null, null, 2, null, null, null, null, Duration.ofMinutes(30),
+                        null, null, null, null),
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 

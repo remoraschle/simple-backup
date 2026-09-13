@@ -36,12 +36,17 @@
         </td>
       </ng-container>
 
-      <ng-container matColumnDef="paths">
-        <th mat-header-cell *matHeaderCellDef>Pfade</th>
+      <ng-container matColumnDef="type">
+        <th mat-header-cell *matHeaderCellDef>Art</th>
+        <td mat-cell *matCellDef="let source" class="whitespace-nowrap">
+          {{ typeLabel(source) }}
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="source">
+        <th mat-header-cell *matHeaderCellDef>Woher</th>
         <td mat-cell *matCellDef="let source">
-          @for (path of pathsOf(source); track path) {
-            <code class="block text-sm">{{ path }}</code>
-          }
+          <code class="text-sm">{{ describe(source) }}</code>
         </td>
       </ng-container>
 

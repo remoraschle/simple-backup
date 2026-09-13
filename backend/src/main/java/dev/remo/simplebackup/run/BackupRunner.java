@@ -16,8 +16,12 @@ import dev.remo.simplebackup.restic.ResticOutputParser;
 import dev.remo.simplebackup.restic.ResticRepository;
 import dev.remo.simplebackup.snapshot.ResticTargets;
 import dev.remo.simplebackup.shared.SecretRedactor;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,6 +47,8 @@ public class BackupRunner {
     private final ResticTargets targets;
     private final ResticOutputParser outputParser;
     private final SecretRedactor redactor;
+    private final SourceProducers producers;
+    private final RunProperties properties;
 
     /**
      * Eigenes Zeitlimit fuers Aufraeumen: {@code prune} liest das halbe Repository und
@@ -51,11 +57,13 @@ public class BackupRunner {
     private final Duration pruneTimeout;
 
     BackupRunner(BackupExecutor executor, ResticTargets targets, ResticOutputParser outputParser,
-            SecretRedactor redactor, RunProperties properties) {
+            SecretRedactor redactor, SourceProducers producers, RunProperties properties) {
         this.executor = executor;
         this.targets = targets;
         this.outputParser = outputParser;
         this.redactor = redactor;
+        this.producers = producers;
+        this.properties = properties;
         this.pruneTimeout = properties.pruneTimeout();
     }
 
@@ -70,28 +78,101 @@ public class BackupRunner {
     public List<TargetOutcome> run(ExecutablePlan plan, RunProgressListener listener) {
         List<TargetOutcome> outcomes = new ArrayList<>();
 
-        for (ExecutableTarget target : plan.enabledTargets()) {
-            try {
-                outcomes.add(runTarget(plan, target, listener));
-            } catch (RuntimeException e) {
-                // Auch ein unerwarteter Fehler darf nur dieses eine Ziel betreffen.
-                log.warn("Ziel {} des Plans {} fehlgeschlagen: {}", target.name(), plan.planName(),
-                        e.getMessage());
-                outcomes.add(TargetOutcome.failed(target, redactor.redact(String.valueOf(e.getMessage()))));
+        // Erst beschaffen, dann sichern. Fuer ein Verzeichnis ist der erste Schritt nichts
+        // weiter als der Pfad; fuer eine Datenbank ein Dump, fuer GitHub ein Klon. Scheitert
+        // die Beschaffung, gibt es nichts zu uebertragen -- dann endet der Lauf hier.
+        String staging = prepareStagingDirectory(plan);
+        PreparedSource prepared = producers.prepare(plan, staging, listener);
+
+        try {
+            for (ExecutableTarget target : plan.enabledTargets()) {
+                try {
+                    outcomes.add(runTarget(plan, target, prepared, listener));
+                } catch (RuntimeException e) {
+                    // Auch ein unerwarteter Fehler darf nur dieses eine Ziel betreffen.
+                    log.warn("Ziel {} des Plans {} fehlgeschlagen: {}", target.name(), plan.planName(),
+                            e.getMessage());
+                    outcomes.add(TargetOutcome.failed(target,
+                            redactor.redact(String.valueOf(e.getMessage()))));
+                }
             }
+            return outcomes;
+
+        } finally {
+            discard(prepared, listener);
         }
-        return outcomes;
+    }
+
+    /**
+     * Raeumt Zwischenstaende weg.
+     *
+     * <p>Auch nach einem Fehlschlag: Ein liegengebliebener Datenbank-Dump ist unverschluesselter
+     * Klartext auf der Platte -- genau das, was diese Anwendung sonst vermeidet.
+     */
+    private void discard(PreparedSource prepared, RunProgressListener listener) {
+        if (prepared.stagingDirectory() == null) {
+            return;
+        }
+        UUID stepId = listener.stepStarted(StepKind.CLEANUP, null, "Zwischenstand aufräumen",
+                executor.defaultEnvironment(), List.of());
+        try {
+            deleteRecursively(Path.of(prepared.stagingDirectory()));
+            listener.stepFinished(stepId, StepStatus.SUCCESS, 0, "Zwischenstand aufgeräumt");
+
+        } catch (RuntimeException e) {
+            log.error("Zwischenstand {} liess sich nicht aufraeumen", prepared.stagingDirectory(), e);
+            listener.stepFinished(stepId, StepStatus.FAILED, null, String.valueOf(e.getMessage()));
+        }
+    }
+
+    /**
+     * Legt das Verzeichnis fuer Zwischenstaende an -- leer.
+     *
+     * <p>Vom Backend und nicht vom Runner: Der bekommt es als Einhaengung und kann es nicht
+     * selbst erzeugen. Reste eines abgebrochenen Laufs fliegen vorher raus, sonst landete
+     * ein halber Dump von gestern in der heutigen Sicherung.
+     */
+    private String prepareStagingDirectory(ExecutablePlan plan) {
+        Path staging = Path.of(properties.stagingDirectory(), "plan-" + plan.planId());
+        try {
+            deleteRecursively(staging);
+            Files.createDirectories(staging);
+            return staging.toString();
+
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "Arbeitsverzeichnis %s liess sich nicht anlegen: %s".formatted(staging, e.getMessage()), e);
+        }
+    }
+
+    private static void deleteRecursively(Path path) {
+        if (!Files.exists(path)) {
+            return;
+        }
+        try (var walk = Files.walk(path)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(entry -> {
+                try {
+                    Files.deleteIfExists(entry);
+                } catch (IOException e) {
+                    throw new IllegalStateException("Konnte " + entry + " nicht loeschen", e);
+                }
+            });
+        } catch (IOException e) {
+            throw new IllegalStateException("Aufraeumen fehlgeschlagen: " + e.getMessage(), e);
+        }
     }
 
     private TargetOutcome runTarget(ExecutablePlan plan, ExecutableTarget target,
-            RunProgressListener listener) {
+            PreparedSource prepared, RunProgressListener listener) {
 
         if (target.mode() != TargetMode.RESTIC) {
             return TargetOutcome.skipped(target, "Der Spiegel-Modus ist noch nicht umgesetzt");
         }
 
         ResticRepository repository = targets.repositoryFor(target.config(), target.name());
-        List<VolumeMount> mounts = mountsFor(plan, target);
+
+        List<VolumeMount> mounts = new ArrayList<>(prepared.mounts());
+        mounts.addAll(targets.mountsFor(target.config()));
 
         // Schritt 1: Gibt es das Repository schon? Der Rueckgabewert sagt es, ohne dass eine
         // Ausgabe gedeutet werden muesste.
@@ -114,9 +195,8 @@ public class BackupRunner {
         }
 
         // Schritt 2: die eigentliche Sicherung.
-        List<String> paths = sourcePathsInRunner(plan);
-        var backup = ResticCommands.backup(paths, plan.resticHost(), plan.resticTag(),
-                excludesOf(plan), null, oneFileSystemOf(plan));
+        var backup = ResticCommands.backup(prepared.paths(), plan.resticHost(), plan.resticTag(),
+                prepared.excludes(), null, oneFileSystemOf(plan));
 
         StepOutcome transfer = execute(plan, target, StepKind.TRANSFER,
                 "Sicherung auf " + target.name(), backup, repository, mounts, listener,
@@ -229,36 +309,6 @@ public class BackupRunner {
             case TIMEOUT -> StepStatus.TIMEOUT;
             case CANCELLED -> StepStatus.CANCELLED;
         };
-    }
-
-    /**
-     * Die Einhaengungen, die der Runner braucht.
-     *
-     * <p>Quellen immer schreibgeschuetzt: Das Werkzeug hat auf Originaldaten nichts zu
-     * schreiben, und ein schreibgeschuetzter Mount macht einen Fehler unmoeglich statt nur
-     * unwahrscheinlich.
-     */
-    private List<VolumeMount> mountsFor(ExecutablePlan plan, ExecutableTarget target) {
-        List<VolumeMount> mounts = new ArrayList<>();
-
-        if (plan.source() instanceof SourceConfig.LocalPath localPath) {
-            localPath.paths().forEach(path -> mounts.add(targets.translate(path, true)));
-        }
-        mounts.addAll(targets.mountsFor(target.config()));
-        return mounts;
-    }
-
-    private List<String> sourcePathsInRunner(ExecutablePlan plan) {
-        if (plan.source() instanceof SourceConfig.LocalPath localPath) {
-            return localPath.paths().stream().map(path -> targets.translate(path, true).target()).toList();
-        }
-        throw new IllegalStateException(
-                "Quellen vom Typ %s sind noch nicht umgesetzt".formatted(plan.source().type()));
-    }
-
-    private static List<String> excludesOf(ExecutablePlan plan) {
-        return plan.source() instanceof SourceConfig.LocalPath localPath
-                ? localPath.excludes() : List.of();
     }
 
     private static boolean oneFileSystemOf(ExecutablePlan plan) {

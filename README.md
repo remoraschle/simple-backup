@@ -10,7 +10,7 @@ wiederherstellbar.
 
 ## Status
 
-**M0–M4 abgeschlossen.** Das Werkzeug sichert und meldet sich, wenn etwas nicht stimmt:
+**M0–M5 abgeschlossen.** Das Werkzeug sichert und meldet sich, wenn etwas nicht stimmt:
 Pläne mit mehreren Zielen, Zeitplanung, Ausführung in Containern, Lauf-Historie mit
 Teilerfolg und Live-Protokoll, vollständige Oberfläche. Dazu Benachrichtigungen über
 Pushover und Webhook, Aufbewahrung nach Großvater-Vater-Sohn und ein Totmannschalter, der
@@ -25,8 +25,12 @@ Teilen zurückholen, einzelne Dateien herunterladen. Dazu `restic check` und ein
 die eine echte Datei zurückholt und mit dem Original vergleicht — beides sonntags nachts auch
 von selbst, denn eine Prüfung, die man von Hand anstoßen muss, wird genau einmal angestoßen.
 
-Als Nächstes M5–M7: weitere Quellen (PostgreSQL, GitHub, S3, SFTP), der Spiegel-Modus mit
-rsync und die Kür (Metriken, Konfig-Export, Blockgeräte, OIDC).
+Gesichert werden können Verzeichnisse, PostgreSQL-Datenbanken (mit versionspassendem
+`pg_dump`, Rollen und geprüftem Dump) und GitHub-Repositories (als Mirror, samt Issues und
+Releases).
+
+Als Nächstes M6–M7: S3 und SFTP als Quellen, der Spiegel-Modus mit rsync und die Kür
+(Metriken, Konfig-Export, Blockgeräte, OIDC).
 
 ## Dokumentation
 

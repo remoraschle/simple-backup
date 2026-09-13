@@ -96,12 +96,14 @@ class EndToEndBackupTest {
         var targets = new ResticTargets(credentials, mounts, new ObjectMapper());
 
         runner = new BackupRunner(executor, targets, new ResticOutputParser(new ObjectMapper()),
-                new SecretRedactor(), testProperties());
+                new SecretRedactor(), new SourceProducers(List.of(new LocalPathProducer(targets))),
+                testProperties());
     }
 
     /** Kurze Zeitlimits: Ein Test soll nicht stundenlang auf ein Aufraeumen warten. */
     private static RunProperties testProperties() {
-        return new RunProperties(null, null, 2, null, null, Duration.ofMinutes(2), null, null);
+        return new RunProperties(null, null, 2, null, null, Duration.ofMinutes(2), null, null,
+                null, null, null, null);
     }
 
     private ExecutablePlan plan() {

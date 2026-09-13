@@ -9,45 +9,172 @@
     </mat-form-field>
 
     <mat-form-field class="mt-2">
+      <mat-label>Art</mat-label>
+      <mat-select formControlName="type">
+        @for (type of types; track type.value) {
+          <mat-option [value]="type.value">{{ type.label }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field>
       <mat-label>Beschreibung</mat-label>
       <input matInput formControlName="description" />
     </mat-form-field>
 
-    <mat-form-field>
-      <mat-label>Pfade</mat-label>
-      <textarea
-        matInput
-        formControlName="paths"
-        rows="3"
-        placeholder="/sources/fotos&#10;/sources/dokumente"
-      ></textarea>
-      <mat-hint>
-        Ein Pfad je Zeile, wie er im Backend-Container sichtbar ist. Nicht eingehängte Pfade werden
-        abgelehnt — ein Runner könnte sie nicht erreichen.
-      </mat-hint>
-    </mat-form-field>
+    @switch (form.controls.type.value) {
+      @case ('LOCAL_PATH') {
+        <mat-form-field class="mt-2">
+          <mat-label>Pfade</mat-label>
+          <textarea
+            matInput
+            formControlName="paths"
+            rows="3"
+            placeholder="/sources/fotos&#10;/sources/dokumente"
+          ></textarea>
+          <mat-hint>
+            Ein Pfad je Zeile, wie er im Backend-Container sichtbar ist. Nicht eingehängte Pfade
+            werden abgelehnt — ein Runner könnte sie nicht erreichen.
+          </mat-hint>
+        </mat-form-field>
 
-    <mat-form-field class="mt-6">
-      <mat-label>Ausschlüsse</mat-label>
-      <textarea
-        matInput
-        formControlName="excludes"
-        rows="2"
-        placeholder="*.tmp&#10;node_modules"
-      ></textarea>
-      <mat-hint>Ein Muster je Zeile, in der Schreibweise von restic</mat-hint>
-    </mat-form-field>
+        <mat-form-field class="mt-4">
+          <mat-label>Ausschlüsse</mat-label>
+          <textarea
+            matInput
+            formControlName="excludes"
+            rows="2"
+            placeholder="*.tmp&#10;node_modules"
+          ></textarea>
+          <mat-hint>Ein Muster je Zeile, in der Schreibweise von restic</mat-hint>
+        </mat-form-field>
 
-    <mat-slide-toggle formControlName="oneFileSystem" class="mt-6">
-      An Dateisystemgrenzen haltmachen
-    </mat-slide-toggle>
-    <p class="mt-1 mb-0 text-sm text-on-surface-variant">
-      Verhindert, dass ein unterhalb eingehängtes Netzlaufwerk unbemerkt mitgesichert wird.
-    </p>
+        <mat-slide-toggle formControlName="oneFileSystem" class="mt-4">
+          An Dateisystemgrenzen haltmachen
+        </mat-slide-toggle>
+        <p class="mt-1 mb-0 text-sm text-on-surface-variant">
+          Verhindert, dass ein unterhalb eingehängtes Netzlaufwerk unbemerkt mitgesichert wird.
+        </p>
+      }
+
+      @case ('POSTGRES') {
+        <div class="mt-2 grid grid-cols-[1fr_120px] gap-2">
+          <mat-form-field>
+            <mat-label>Server</mat-label>
+            <input matInput formControlName="host" />
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>Port</mat-label>
+            <input matInput type="number" formControlName="port" />
+          </mat-form-field>
+        </div>
+
+        <mat-form-field>
+          <mat-label>Hauptversion</mat-label>
+          <mat-select formControlName="majorVersion">
+            @for (version of postgresVersions; track version) {
+              <mat-option [value]="version">PostgreSQL {{ version }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>
+            Bestimmt, welches pg_dump verwendet wird. Ein älteres weigert sich, eine neuere
+            Datenbank zu lesen — und ein Dump aus dem falschen Werkzeug fällt erst beim Einspielen
+            auf.
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field class="mt-4">
+          <mat-label>Benutzer</mat-label>
+          <input matInput formControlName="username" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Passwort</mat-label>
+          <mat-select formControlName="passwordCredentialId">
+            @for (credential of passwords(); track credential.id) {
+              <mat-option [value]="credential.id">{{ credential.name }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>
+            @if (passwords().length === 0) {
+              Zuerst unter „Einstellungen“ ein Passwort hinterlegen
+            } @else {
+              Wird verschlüsselt abgelegt und geht als Datei an den Runner, nie über die
+              Kommandozeile
+            }
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field class="mt-4">
+          <mat-label>Datenbanken</mat-label>
+          <textarea matInput formControlName="databases" rows="2"></textarea>
+          <mat-hint>
+            Eine je Zeile. Leer lassen für alle — eine neue Datenbank wäre sonst so lange
+            ungesichert, bis jemand daran denkt.
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-slide-toggle formControlName="includeGlobals" class="mt-4">
+          Rollen und Tablespaces mitsichern
+        </mat-slide-toggle>
+        <p class="mt-1 mb-0 text-sm text-on-surface-variant">
+          Ohne sie lässt sich ein Dump zwar einspielen, aber niemand darf hinterher darauf
+          zugreifen.
+        </p>
+      }
+
+      @default {
+        <mat-form-field class="mt-2">
+          <mat-label>Benutzer oder Organisation</mat-label>
+          <input matInput formControlName="owner" placeholder="remoraschle" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Token</mat-label>
+          <mat-select formControlName="tokenCredentialId">
+            @for (credential of tokens(); track credential.id) {
+              <mat-option [value]="credential.id">{{ credential.name }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>
+            @if (tokens().length === 0) {
+              Zuerst unter „Einstellungen“ einen API-Token hinterlegen
+            } @else {
+              Geht als Anmeldedatei an git, nie in die Adresse — ein Token in der URL landet in der
+              Prozessliste und am Ende in .git/config
+            }
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field class="mt-4">
+          <mat-label>Repositories</mat-label>
+          <textarea matInput formControlName="repositories" rows="2"></textarea>
+          <mat-hint>
+            Eines je Zeile. Leer lassen für alle — ein neues Repository wäre sonst so lange
+            ungesichert, bis jemand daran denkt.
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-slide-toggle formControlName="includeMetadata" class="mt-4">
+          Issues und Releases mitsichern
+        </mat-slide-toggle>
+        <p class="mt-1 mb-0 text-sm text-on-surface-variant">
+          Sie liegen nicht im Git-Repository. Der Code ließe sich aus jedem Klon wiederherstellen,
+          die Diskussion darüber nicht.
+        </p>
+
+        <mat-slide-toggle formControlName="includeForks" class="mt-4">
+          Geforkte Repositories mitsichern
+        </mat-slide-toggle>
+      }
+    }
   </form>
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
   <button matButton mat-dialog-close>Abbrechen</button>
-  <button matButton="filled" (click)="save()" [disabled]="form.invalid">Anlegen</button>
+  <button matButton="filled" (click)="save()" [disabled]="form.invalid || !complete()">
+    Anlegen
+  </button>
 </mat-dialog-actions>

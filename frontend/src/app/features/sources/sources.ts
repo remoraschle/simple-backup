@@ -33,7 +33,7 @@ export class Sources {
 
   protected readonly sources = signal<Source[]>([]);
   protected readonly loading = signal(true);
-  protected readonly columns = ['name', 'paths', 'excludes', 'actions'];
+  protected readonly columns = ['name', 'type', 'source', 'excludes', 'actions'];
 
   constructor() {
     this.reload();
@@ -85,6 +85,39 @@ export class Sources {
 
   protected pathsOf(source: Source): string[] {
     return source.config.type === 'LOCAL_PATH' ? source.config.paths : [];
+  }
+
+  /** Ein Satz, der sagt, woher die Daten kommen — je Art ein anderer. */
+  protected describe(source: Source): string {
+    switch (source.config.type) {
+      case 'LOCAL_PATH':
+        return source.config.paths.join(', ');
+      case 'POSTGRES':
+        return `${source.config.username}@${source.config.host}:${source.config.port} — ${
+          source.config.databases.length === 0
+            ? 'alle Datenbanken'
+            : source.config.databases.join(', ')
+        }`;
+      default:
+        return `${source.config.owner} — ${
+          source.config.repositories.length === 0
+            ? 'alle Repositories'
+            : source.config.repositories.join(', ')
+        }`;
+    }
+  }
+
+  protected typeLabel(source: Source): string {
+    switch (source.type) {
+      case 'LOCAL_PATH':
+        return 'Verzeichnis';
+      case 'POSTGRES':
+        return 'PostgreSQL';
+      case 'GITHUB':
+        return 'GitHub';
+      default:
+        return source.type;
+    }
   }
 
   protected excludesOf(source: Source): string[] {

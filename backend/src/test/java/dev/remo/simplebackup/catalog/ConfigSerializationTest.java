@@ -149,7 +149,9 @@ class ConfigSerializationTest {
             // Damit die Oberflaeche sie ausgraut, statt ein Anlegen zuzulassen, das
             // beim ersten Lauf scheitert.
             assertThat(SourceType.LOCAL_PATH.isImplemented()).isTrue();
-            assertThat(SourceType.POSTGRES.isImplemented()).isFalse();
+            assertThat(SourceType.POSTGRES.isImplemented()).isTrue();
+            assertThat(SourceType.GITHUB.isImplemented()).isTrue();
+            assertThat(SourceType.S3.isImplemented()).isFalse();
             assertThat(TargetType.S3.isImplemented()).isTrue();
             assertThat(TargetType.SFTP.isImplemented()).isFalse();
         }

@@ -110,6 +110,14 @@ simplebackup:
     # viel Verspaetung vorher geduldet wird.
     watchdog-interval: 15m
     watchdog-grace: 30m
+    # Zeitlimit fuers Beschaffen der Daten: Dump, Klon, Abzug.
+    acquire-timeout: 4h
+    # Die Hauptversion wird eingesetzt. pg_dump weigert sich, eine neuere Datenbank zu lesen
+    # als es selbst kennt -- ein Werkzeug mit fester Version sichert irgendwann nichts mehr.
+    postgres-image: ${SIMPLEBACKUP_POSTGRES_IMAGE:postgres:%d-alpine}
+    git-image: ${SIMPLEBACKUP_GIT_IMAGE:alpine/git:latest}
+    # Abweichend nur fuer GitHub Enterprise oder Tests.
+    github-api-url: ${SIMPLEBACKUP_GITHUB_API:https://api.github.com}
 
   snapshot:
     # Grosszuegig: Im Ernstfall geht es um viele Daten, und ein Abbruch mitten im
