@@ -603,7 +603,7 @@ simple-backup/
 | **M4 — Wiederherstellung** ✅ | TreeTable auf CDK-Basis, Snapshot-Browser, Restore, Datei-Download, `restic check`, automatischer Restore-Test | Backups sind nachweislich gut |
 | **M5 — Postgres & GitHub** ✅ | pg_dump-Pipeline mit versionspassendem Runner, Globals, Dump-Verifikation, GitHub-Discovery + Mirror + Metadaten | Die beiden wertvollsten Quellen |
 | **M6 — S3, SFTP, rsync-Mirror** ✅ | rclone-Adapter, Hostkey-Handling, Mirror-Modus | Quellmatrix im Wesentlichen vollständig |
-| **M7 — Kür** ✅ | Prometheus-Kennzahlen je Plan, Konfig-Export/Import als passwortgeschütztes Archiv, Blockdevices (nur rootful, nur freigegebene Geräte), OIDC als zweiter Anmeldeweg | Betriebsreif |
+| **M7 — Kür** ✅ | Prometheus-Kennzahlen je Plan, Konfig-Export/Import als passwortgeschütztes Archiv, Blockdevices (nur rootful, nur freigegebene Geräte), OIDC als zweiter Anmeldeweg, E-Mail als dritter Alarmkanal | Betriebsreif |
 
 M1 ist wegen der Sidecar-Entscheidung ein eigener Meilenstein und kein Nebenprodukt: Host-Pfad-Übersetzung, Wiederanhängen nach Neustart und das Aufräumen verwaister Container sind die Stellen, an denen dieses Modell scheitert, wenn man sie nebenbei erledigt. Einmal sauber gebaut, ist danach jede weitere Quelle nur noch eine Argumentliste.
 

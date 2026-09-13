@@ -13,7 +13,7 @@ wiederherstellbar.
 **M0–M7 abgeschlossen — das Werkzeug ist betriebsreif.** Es sichert, meldet sich, wenn
 etwas nicht stimmt, und lässt sich wiederherstellen: Pläne mit mehreren Zielen,
 Zeitplanung, Ausführung in Containern, Lauf-Historie mit Teilerfolg und Live-Protokoll,
-vollständige Oberfläche. Dazu Benachrichtigungen über Pushover und Webhook, Aufbewahrung
+vollständige Oberfläche. Dazu Benachrichtigungen über Pushover, Webhook und E-Mail, Aufbewahrung
 nach Großvater-Vater-Sohn und ein Totmannschalter, der Alarm schlägt, wenn eine Sicherung
 ausbleibt — der gefährlichere Fall gegenüber dem Fehlschlag, denn ein ausgebliebener Lauf
 meldet sich nie von selbst.
@@ -46,6 +46,9 @@ Zuletzt kam dazu, was den Dauerbetrieb trägt:
 - **Anmeldung über einen Anbieter** (Authelia, Keycloak, Authentik) als Alternative zum
   Formular. Wer sich zum ersten Mal anmeldet, bekommt Leserechte — Administrator wird
   niemand allein dadurch, dass er sich anmeldet.
+- **E-Mail als dritter Alarmkanal**, über einen eigenen Mailserver. Der Weg, den jeder hat,
+  auch ohne Konto bei einem Dienst — und der einzige, der auch nach einem Telefonwechsel
+  noch ankommt.
 
 ## Dokumentation
 

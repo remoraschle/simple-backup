@@ -142,6 +142,27 @@ Ausgang (`SUCCESS`, `PARTIAL`, `FAILED`, …) und der freie Platz auf den Zielen
 Der eingebaute Totmannschalter meldet denselben Fall über die eingerichteten Kanäle. Beides
 nebeneinander ist Absicht: Die Meldung erreicht auch den, der kein Prometheus betreibt.
 
+## Alarmkanäle
+
+Drei Wege stehen zur Verfügung, und sie ergänzen sich:
+
+| Kanal | Wofür |
+|---|---|
+| **Pushover** | Der Alarm mitten in der Nacht. Kritisches wird mit Quittierungspflicht gesendet und so lange wiederholt, bis jemand bestätigt |
+| **Webhook** | Alles, was eine Adresse hat: Gotify, ntfy, Discord, ein eigenes Skript |
+| **E-Mail** | Der Weg, den jeder hat. Kommt auch nach einem Telefonwechsel noch an |
+
+Mehr als einen einzurichten ist ausdrücklich sinnvoll: Der Kanal, über den der Alarm käme,
+kann selbst der sein, der gerade ausgefallen ist.
+
+Für E-Mail werden Server, Port, Absender und Empfänger am Kanal selbst hinterlegt — nicht
+in der Konfiguration der Anwendung. So lässt sich ein Kanal ändern, ohne sie neu zu starten.
+Das Passwort kommt aus den hinterlegten Zugangsdaten, nie aus einem Klartextfeld.
+
+Jeder Kanal hat einen Testknopf. Die Probemeldung nimmt denselben Weg wie ein echter Alarm
+— durch den Postausgang, mit denselben Wiederholungen. Ein Test, der einen anderen Weg
+nimmt als der Ernstfall, testet das Falsche.
+
 ## Ganze Datenträger sichern
 
 Nur mit einem Docker-Daemon **mit** Wurzelrechten — rootless kann kein Gerät durchreichen,

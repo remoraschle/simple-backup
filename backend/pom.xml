@@ -84,6 +84,11 @@
             <groupId>org.springframework.session</groupId>
             <artifactId>spring-session-jdbc</artifactId>
         </dependency>
+        <!-- E-Mail als Alarmkanal: der Weg, den jeder hat, auch ohne Konto bei einem Dienst -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
         <!--
             OIDC als zweiter Anmeldeweg. Bleibt ohne konfigurierten Anbieter vollstaendig
             untaetig: Ohne Registrierung legt Spring Boot kein ClientRegistrationRepository

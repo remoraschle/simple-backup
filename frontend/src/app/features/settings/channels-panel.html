@@ -143,10 +143,67 @@
           <mat-select formControlName="type">
             <mat-option value="PUSHOVER">Pushover</mat-option>
             <mat-option value="WEBHOOK">Webhook</mat-option>
+            <mat-option value="SMTP">E-Mail</mat-option>
           </mat-select>
         </mat-form-field>
 
-        @if (form.controls.type.value === 'PUSHOVER') {
+        @if (form.controls.type.value === 'SMTP') {
+          <mat-form-field>
+            <mat-label>Mailserver</mat-label>
+            <input matInput formControlName="host" placeholder="mail.example.org" />
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>Port</mat-label>
+            <input matInput type="number" formControlName="port" />
+            <mat-hint>587 für STARTTLS, 465 für durchgehendes TLS, 25 ohne</mat-hint>
+          </mat-form-field>
+
+          <mat-slide-toggle formControlName="startTls" class="mt-4">
+            Verbindung verschlüsseln (STARTTLS)
+          </mat-slide-toggle>
+          <p class="mt-1 mb-0 text-sm text-on-surface-variant">
+            Ohne Verschlüsselung gehen Meldungen und Passwort im Klartext über das Netz. Bei Port
+            465 ist die Verbindung ohnehin von Anfang an verschlüsselt.
+          </p>
+
+          <mat-form-field class="mt-4">
+            <mat-label>Absender</mat-label>
+            <input matInput formControlName="from" placeholder="backup@example.org" />
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>Empfänger</mat-label>
+            <textarea
+              matInput
+              formControlName="recipients"
+              rows="2"
+              placeholder="admin@example.org"
+            ></textarea>
+            <mat-hint>Eine Adresse je Zeile oder durch Komma getrennt</mat-hint>
+          </mat-form-field>
+
+          <mat-form-field class="mt-4">
+            <mat-label>Anmeldename (optional)</mat-label>
+            <input matInput formControlName="username" />
+            <mat-hint>Leer lassen für einen Server, der ohne Anmeldung annimmt</mat-hint>
+          </mat-form-field>
+
+          @if (form.controls.username.value) {
+            <mat-form-field class="mt-4">
+              <mat-label>Passwort</mat-label>
+              <mat-select formControlName="mailCredentialId">
+                @for (credential of headerCredentials(); track credential.id) {
+                  <mat-option [value]="credential.id">{{ credential.name }}</mat-option>
+                }
+              </mat-select>
+              <mat-hint
+                >Aus den hinterlegten Zugängen — ein Passwort gehört nicht ins
+                Klartextfeld</mat-hint
+              >
+            </mat-form-field>
+          }
+        } @else if (form.controls.type.value === 'PUSHOVER') {
           <mat-form-field>
             <mat-label>Zugang</mat-label>
             <mat-select formControlName="credentialId">

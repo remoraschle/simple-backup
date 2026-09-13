@@ -3,6 +3,7 @@ package dev.remo.simplebackup.notification;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -15,7 +16,8 @@ import java.util.UUID;
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({
         @JsonSubTypes.Type(value = ChannelConfig.Pushover.class, name = "PUSHOVER"),
-        @JsonSubTypes.Type(value = ChannelConfig.Webhook.class, name = "WEBHOOK")})
+        @JsonSubTypes.Type(value = ChannelConfig.Webhook.class, name = "WEBHOOK"),
+        @JsonSubTypes.Type(value = ChannelConfig.Smtp.class, name = "SMTP")})
 public sealed interface ChannelConfig {
 
     ChannelType type();
@@ -92,6 +94,68 @@ public sealed interface ChannelConfig {
         @Override
         public ChannelType type() {
             return ChannelType.WEBHOOK;
+        }
+    }
+
+    /**
+     * E-Mail ueber einen eigenen Mailserver.
+     *
+     * @param host         Mailserver
+     * @param port         587 fuer STARTTLS, 465 fuer durchgehendes TLS, 25 ohne
+     * @param startTls     ob die Verbindung nach dem Verbinden verschluesselt wird. Bei
+     *                     Port 465 ist sie es von Anfang an; das wird am Port erkannt.
+     * @param from         Absender
+     * @param recipients   Empfaenger, mindestens einer
+     * @param username     Anmeldename, oder {@code null} fuer einen Server ohne Anmeldung
+     * @param credentialId Verweis auf das Passwort in der verschluesselten Ablage. Ein
+     *                     Passwort gehoert nicht in die Konfiguration, denn die liefert die
+     *                     API im Klartext aus.
+     */
+    record Smtp(
+            @NotBlank String host,
+            int port,
+            boolean startTls,
+            @NotBlank String from,
+            List<String> recipients,
+            String username,
+            UUID credentialId) implements ChannelConfig {
+
+        public Smtp {
+            port = port <= 0 ? 587 : port;
+            recipients = recipients == null ? List.of() : List.copyOf(recipients);
+
+            if (recipients.isEmpty()) {
+                throw new IllegalArgumentException("Ohne Empfaenger geht keine Meldung hinaus");
+            }
+            for (String recipient : recipients) {
+                requireAddress(recipient, "Empfaenger");
+            }
+            requireAddress(from, "Absender");
+
+            if (username != null && username.isBlank()) {
+                username = null;
+            }
+            if (username != null && credentialId == null) {
+                throw new IllegalArgumentException("Zu einem Anmeldenamen gehoert auch ein Passwort");
+            }
+        }
+
+        /**
+         * Eine Adresse ohne {@code @} ist keine.
+         *
+         * <p>Bewusst keine vollstaendige Pruefung nach RFC: Die trifft entweder zu viel
+         * oder zu wenig, und ob der Server die Adresse annimmt, sagt am Ende nur der
+         * Server. Diese Pruefung faengt den Tippfehler ab, nicht den Sonderfall.
+         */
+        private static void requireAddress(String value, String was) {
+            if (value == null || !value.contains("@") || value.contains(" ")) {
+                throw new IllegalArgumentException("%s ist keine E-Mail-Adresse: %s".formatted(was, value));
+            }
+        }
+
+        @Override
+        public ChannelType type() {
+            return ChannelType.SMTP;
         }
     }
 }

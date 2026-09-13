@@ -86,6 +86,14 @@ export class ChannelsPanel {
     url: [''],
     headerName: [''],
     headerCredentialId: [''],
+    // E-Mail
+    host: [''],
+    port: [587],
+    startTls: [true],
+    from: [''],
+    recipients: [''],
+    username: [''],
+    mailCredentialId: [''],
   });
 
   constructor() {
@@ -98,11 +106,14 @@ export class ChannelsPanel {
   }
 
   protected describe(channel: NotificationChannel): string {
-    return channel.config.type === 'PUSHOVER'
-      ? channel.config.emergency
-        ? 'Pushover, mit Quittierungspflicht'
-        : 'Pushover'
-      : channel.config.url;
+    switch (channel.config.type) {
+      case 'PUSHOVER':
+        return channel.config.emergency ? 'Pushover, mit Quittierungspflicht' : 'Pushover';
+      case 'SMTP':
+        return `${channel.config.recipients.join(', ')} über ${channel.config.host}`;
+      default:
+        return channel.config.url;
+    }
   }
 
   protected severityLabel(severity: Severity): string {
@@ -111,22 +122,7 @@ export class ChannelsPanel {
 
   protected save(): void {
     const value = this.form.getRawValue();
-    const config =
-      value.type === 'PUSHOVER'
-        ? {
-            type: 'PUSHOVER',
-            credentialId: value.credentialId,
-            device: value.device || null,
-            emergency: value.emergency,
-            retrySeconds: null,
-            expireSeconds: null,
-          }
-        : {
-            type: 'WEBHOOK',
-            url: value.url,
-            headerName: value.headerName || null,
-            credentialId: value.headerName ? value.headerCredentialId || null : null,
-          };
+    const config = this.configFor(value);
 
     if (this.form.invalid || !this.configComplete(value.type, config)) {
       return;
@@ -154,8 +150,49 @@ export class ChannelsPanel {
       });
   }
 
+  private configFor(value: ReturnType<typeof this.form.getRawValue>): Record<string, unknown> {
+    switch (value.type) {
+      case 'PUSHOVER':
+        return {
+          type: 'PUSHOVER',
+          credentialId: value.credentialId,
+          device: value.device || null,
+          emergency: value.emergency,
+          retrySeconds: null,
+          expireSeconds: null,
+        };
+      case 'SMTP':
+        return {
+          type: 'SMTP',
+          host: value.host,
+          port: value.port,
+          startTls: value.startTls,
+          from: value.from,
+          recipients: splitAddresses(value.recipients),
+          username: value.username || null,
+          credentialId: value.username ? value.mailCredentialId || null : null,
+        };
+      default:
+        return {
+          type: 'WEBHOOK',
+          url: value.url,
+          headerName: value.headerName || null,
+          credentialId: value.headerName ? value.headerCredentialId || null : null,
+        };
+    }
+  }
+
   private configComplete(type: ChannelType, config: Record<string, unknown>): boolean {
-    return type === 'PUSHOVER' ? Boolean(config['credentialId']) : Boolean(config['url']);
+    switch (type) {
+      case 'PUSHOVER':
+        return Boolean(config['credentialId']);
+      case 'SMTP':
+        return Boolean(
+          config['host'] && config['from'] && (config['recipients'] as string[]).length > 0,
+        );
+      default:
+        return Boolean(config['url']);
+    }
   }
 
   protected test(channel: NotificationChannel): void {
@@ -182,4 +219,12 @@ export class ChannelsPanel {
       error: () => undefined,
     });
   }
+}
+
+/** Eine Adresse je Zeile oder durch Komma getrennt — beides tippt sich natürlich. */
+function splitAddresses(value: string): string[] {
+  return value
+    .split(/[\n,;]/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }

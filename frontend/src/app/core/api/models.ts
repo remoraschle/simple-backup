@@ -250,7 +250,7 @@ export interface RetentionPolicy {
   readonly rule: RetentionRule;
 }
 
-export type ChannelType = 'PUSHOVER' | 'WEBHOOK';
+export type ChannelType = 'PUSHOVER' | 'WEBHOOK' | 'SMTP';
 
 export type Severity = 'INFO' | 'WARNING' | 'CRITICAL';
 
@@ -271,7 +271,18 @@ export interface WebhookChannelConfig {
   readonly credentialId: string | null;
 }
 
-export type ChannelConfig = PushoverChannelConfig | WebhookChannelConfig;
+export interface SmtpChannelConfig {
+  readonly type: 'SMTP';
+  readonly host: string;
+  readonly port: number;
+  readonly startTls: boolean;
+  readonly from: string;
+  readonly recipients: string[];
+  readonly username: string | null;
+  readonly credentialId: string | null;
+}
+
+export type ChannelConfig = PushoverChannelConfig | WebhookChannelConfig | SmtpChannelConfig;
 
 export interface NotificationChannel {
   readonly id: string;
