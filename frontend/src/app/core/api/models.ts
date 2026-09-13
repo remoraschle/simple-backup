@@ -92,12 +92,35 @@ export interface SftpSourceConfig {
   readonly credentialId: string;
 }
 
+export interface BlockDeviceSourceConfig {
+  readonly type: 'BLOCK_DEVICE';
+  readonly device: string;
+  /** Dateiname des Abbilds im Snapshot. */
+  readonly imageName: string;
+  /** Ob Nullblöcke als Löcher geschrieben werden. */
+  readonly sparse: boolean;
+}
+
 export type SourceConfig =
   | LocalPathSourceConfig
   | PostgresSourceConfig
   | GitHubSourceConfig
   | S3SourceConfig
-  | SftpSourceConfig;
+  | SftpSourceConfig
+  | BlockDeviceSourceConfig;
+
+/**
+ * Ob sich ein Quelltyp auf dieser Installation anlegen lässt.
+ *
+ * <p>Nicht jeder Typ kann überall: Ein Blockgerät braucht einen Docker-Daemon mit
+ * Wurzelrechten und eine ausdrückliche Freigabe. Die Begründung kommt mit, damit ein
+ * ausgegrauter Eintrag keine Sackgasse ist.
+ */
+export interface SourceTypeInfo {
+  readonly type: SourceType;
+  readonly available: boolean;
+  readonly unavailableReason: string | null;
+}
 
 export interface LocalPathTargetConfig {
   readonly type: 'LOCAL_PATH';

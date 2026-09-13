@@ -2,6 +2,9 @@ package dev.remo.simplebackup.security;
 
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -13,6 +16,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
@@ -31,6 +35,8 @@ import tools.jackson.databind.ObjectMapper;
 @EnableMethodSecurity
 class SecurityConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+
     /**
      * Argon2id, und zwar als delegierender Encoder: Vorhandene Hashes tragen ihr Praefix,
      * sodass sich das Verfahren spaeter wechseln laesst, ohne alle Passwoerter zu
@@ -44,11 +50,31 @@ class SecurityConfig {
         return new DelegatingPasswordEncoder(defaultId, encoders);
     }
 
+    /**
+     * @param registrations die konfigurierten Anbieter. Gibt es keinen, bleibt es beim
+     *                      Formular -- dann waere ein Anmeldeknopf ein Knopf ins Leere.
+     * @param oidcLogin     wie eine Anmeldung ueber einen Anbieter ablaeuft, falls es einen
+     *                      gibt
+     */
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper,
+            ObjectProvider<ClientRegistrationRepository> registrations,
+            OidcLoginSupport oidcLogin) throws Exception {
+
+        // Erst hier entschieden und nicht ueber eine Bedingung an einer Konfiguration: Zu
+        // diesem Zeitpunkt steht fest, ob ein Anbieter registriert ist.
+        if (registrations.getIfAvailable() != null) {
+            log.info("Anmeldung über einen Anbieter ist eingeschaltet");
+            oidcLogin.applyTo(http);
+        }
+
         http
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/api/auth/session").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/session",
+                                "/api/auth/providers").permitAll()
+                        // Der Weg zum Anbieter und zurueck. Wer hier ankommt, ist noch nicht
+                        // angemeldet -- das ist ja der Zweck.
+                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
                         // Prometheus-Metriken verraten Planbezeichnungen und Zeitpunkte.
                         .requestMatchers("/actuator/**").hasRole(UserRole.ADMIN.name())

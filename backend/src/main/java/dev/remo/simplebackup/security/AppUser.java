@@ -79,6 +79,16 @@ public class AppUser {
         this.lastLoginAt = Instant.now();
     }
 
+    /**
+     * Die Rolle kommt vom Anbieter.
+     *
+     * <p>Nur dort verwendet: Wo eine Gruppe des Anbieters ueber die Rolle entscheidet, ist
+     * er die Wahrheit -- sonst wuerde eine Rechteaenderung dort hier nie ankommen.
+     */
+    void changeRole(UserRole newRole) {
+        this.role = newRole;
+    }
+
     void changePassword(String newPasswordHash) {
         this.passwordHash = newPasswordHash;
         this.mustChangePassword = false;

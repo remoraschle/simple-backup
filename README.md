@@ -10,12 +10,13 @@ wiederherstellbar.
 
 ## Status
 
-**M0–M6 abgeschlossen.** Das Werkzeug sichert und meldet sich, wenn etwas nicht stimmt:
-Pläne mit mehreren Zielen, Zeitplanung, Ausführung in Containern, Lauf-Historie mit
-Teilerfolg und Live-Protokoll, vollständige Oberfläche. Dazu Benachrichtigungen über
-Pushover und Webhook, Aufbewahrung nach Großvater-Vater-Sohn und ein Totmannschalter, der
-Alarm schlägt, wenn eine Sicherung ausbleibt — der gefährlichere Fall gegenüber dem
-Fehlschlag, denn ein ausgebliebener Lauf meldet sich nie von selbst.
+**M0–M7 abgeschlossen — das Werkzeug ist betriebsreif.** Es sichert, meldet sich, wenn
+etwas nicht stimmt, und lässt sich wiederherstellen: Pläne mit mehreren Zielen,
+Zeitplanung, Ausführung in Containern, Lauf-Historie mit Teilerfolg und Live-Protokoll,
+vollständige Oberfläche. Dazu Benachrichtigungen über Pushover und Webhook, Aufbewahrung
+nach Großvater-Vater-Sohn und ein Totmannschalter, der Alarm schlägt, wenn eine Sicherung
+ausbleibt — der gefährlichere Fall gegenüber dem Fehlschlag, denn ein ausgebliebener Lauf
+meldet sich nie von selbst.
 
 End-to-End-Tests sichern mit echtem restic, stellen die Dateien wieder her und belegen, dass
 die Aufbewahrungsregel eines Plans die Snapshots anderer Pläne unberührt lässt.
@@ -27,10 +28,24 @@ von selbst, denn eine Prüfung, die man von Hand anstoßen muss, wird genau einm
 
 Gesichert werden können Verzeichnisse, PostgreSQL-Datenbanken (mit versionspassendem
 `pg_dump`, Rollen und geprüftem Dump), GitHub-Repositories (als Mirror, samt Issues und
-Releases), S3-Buckets und SFTP-Server. Ziele sind lokale Verzeichnisse, Netzlaufwerke und S3
-— als verschlüsseltes restic-Repository oder als direkt lesbarer Spiegel.
+Releases), S3-Buckets, SFTP-Server und ganze Datenträger als Abbild. Ziele sind lokale
+Verzeichnisse, Netzlaufwerke und S3 — als verschlüsseltes restic-Repository oder als direkt
+lesbarer Spiegel.
 
-Als Nächstes M7: Metriken, Konfig-Export, Blockgeräte und OIDC.
+Zuletzt kam dazu, was den Dauerbetrieb trägt:
+
+- **Kennzahlen für Prometheus.** Die wichtigste ist das Alter der letzten erfolgreichen
+  Sicherung je Plan; sie beantwortet als einzige die Frage, die im Ernstfall zählt. Der
+  erwartete Abstand kommt als eigene Kennzahl mit, sodass eine Alarmregel ohne fest
+  verdrahtete Schwellwerte auskommt.
+- **Konfiguration sichern und einspielen** als passwortgeschütztes Archiv — der Ausweg aus
+  dem einen Fehler, den diese Anwendung sonst nicht verzeiht: Ohne Masterkey ist die eigene
+  Datenbank wertlos. Das Archiv hängt nicht an ihm.
+- **Ganze Datenträger** als Abbild, nur mit einem Docker-Daemon mit Wurzelrechten und nur
+  für ausdrücklich freigegebene Geräte.
+- **Anmeldung über einen Anbieter** (Authelia, Keycloak, Authentik) als Alternative zum
+  Formular. Wer sich zum ersten Mal anmeldet, bekommt Leserechte — Administrator wird
+  niemand allein dadurch, dass er sich anmeldet.
 
 ## Dokumentation
 

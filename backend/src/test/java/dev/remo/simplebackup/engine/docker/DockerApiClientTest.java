@@ -49,7 +49,7 @@ class DockerApiClientTest {
                     "runner:1.0", List.of("restic", "backup", "/daten"), List.of("TZ=Europe/Zurich"),
                     Map.of("simple-backup.run-id", "lauf-1"), "1000:1000", false, true, true,
                     new DockerDto.HostConfig(List.of("/srv:/quelle:ro"), 512L * 1024 * 1024,
-                            1_500_000_000L, "none", false, false, List.of("ALL"), null));
+                            1_500_000_000L, "none", false, false, List.of("ALL"), null, null));
 
             String id = client.createContainer(request, "simple-backup-lauf-1");
 
@@ -341,7 +341,8 @@ class DockerApiClientTest {
         private DockerDto.CreateContainer minimalRequest() {
             return new DockerDto.CreateContainer("runner:1", List.of("true"), List.of(), Map.of(),
                     null, false, true, true,
-                    new DockerDto.HostConfig(List.of(), null, null, null, false, false, null, null));
+                    new DockerDto.HostConfig(List.of(), null, null, null, false, false, null, null,
+                            null));
         }
     }
 

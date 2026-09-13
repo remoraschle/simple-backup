@@ -15,6 +15,7 @@
 | **restic-Repository-Passwort** | Passwortmanager | Die Backups sind **unwiederbringlich verloren.** Es gibt keine Hintertür. |
 | Zugang zum Ziel (S3-Keys, SSH-Key, Pfad zur Platte) | Passwortmanager | Kein Zugriff auf das Repository |
 | **Masterkey** von simple-backup | Passwortmanager | Die Zugangsdaten *in* der Anwendung sind verloren — die Backups selbst nicht |
+| **Konfigurationsarchiv** (`.sbexp`) und sein Passwort | Getrennt vom Server, Passwort im Passwortmanager | Die Anwendung muss von Hand neu eingerichtet werden. Die Backups selbst sind nicht betroffen |
 | Dieses Dokument | Ausgedruckt oder außerhalb des Servers | Du musst dich durch die restic-Dokumentation arbeiten |
 
 Der Masterkey ist **nicht** dasselbe wie das Repository-Passwort. Der Masterkey schützt die
@@ -130,8 +131,20 @@ restic check --read-data-subset=5%    # 5 % der Daten wirklich lesen
 
 ## Wenn simple-backup selbst wiederhergestellt werden soll
 
-Die Anwendung ist ersetzbar — ihre Datenbank enthält Konfiguration, keine Backupdaten. Mit
-Masterkey und Datenbank-Dump:
+Die Anwendung ist ersetzbar — ihre Datenbank enthält Konfiguration, keine Backupdaten. Für
+die Sicherungen selbst braucht man sie nicht; die Schritte 1 bis 6 kommen ohne sie aus.
+
+**Der schnelle Weg: das Konfigurationsarchiv.** Leere Installation hochfahren, anmelden,
+unter **Einstellungen → Archiv** die `.sbexp`-Datei einspielen. Danach stehen Quellen,
+Ziele, Pläne, Regeln und Kanäle wieder, einschließlich aller Zugangsdaten — auch der
+Repository-Passwörter, mit denen sich die vorhandenen Repositories weiter benutzen lassen.
+
+Das Archiv hängt am Passwort, mit dem es angelegt wurde, und nicht am Masterkey. Genau
+deshalb hilft es in dem Fall, in dem die Datenbank allein nichts mehr wert ist. Pläne
+behalten beim Einspielen ihre Kennung; deshalb findet der Abgleich eines Ziels danach die
+alten Stände wieder und ordnet sie dem richtigen Plan zu.
+
+**Der Weg über die Datenbank**, mit Masterkey und Dump:
 
 ```bash
 docker compose up -d db
@@ -140,10 +153,10 @@ pg_restore --dbname=simplebackup --no-owner simplebackup.dump
 docker compose up -d
 ```
 
-**Ohne Masterkey** lassen sich die gespeicherten Zugangsdaten nicht entschlüsseln. Dann:
-Datenbank neu aufsetzen, Pläne neu anlegen, Zugangsdaten neu eintragen. Die Backups selbst
-bleiben davon unberührt und sind über die Schritte oben weiterhin erreichbar — **sofern das
-Repository-Passwort bekannt ist.**
+**Ohne Masterkey und ohne Archiv** lassen sich die gespeicherten Zugangsdaten nicht
+entschlüsseln. Dann: Datenbank neu aufsetzen, Pläne neu anlegen, Zugangsdaten neu eintragen.
+Die Backups selbst bleiben davon unberührt und sind über die Schritte oben weiterhin
+erreichbar — **sofern das Repository-Passwort bekannt ist.**
 
 Deshalb: Repository-Passwort und Masterkey gehören in den Passwortmanager, nicht nur in
 dieses Werkzeug.

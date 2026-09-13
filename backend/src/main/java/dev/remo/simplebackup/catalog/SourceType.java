@@ -10,9 +10,13 @@ public enum SourceType {
     FTP,
     BLOCK_DEVICE;
 
-    /** Ob dieser Quelltyp bereits umgesetzt ist. */
+    /**
+     * Ob dieser Quelltyp bereits umgesetzt ist.
+     *
+     * <p>Nicht zu verwechseln mit "verfuegbar": Ein Blockgeraet ist umgesetzt, laesst sich
+     * aber nur sichern, wo der Daemon Wurzelrechte hat und das Geraet freigegeben ist.
+     */
     public boolean isImplemented() {
-        return this == LOCAL_PATH || this == POSTGRES || this == GITHUB
-                || this == S3 || this == SFTP;
+        return this != FTP;
     }
 }

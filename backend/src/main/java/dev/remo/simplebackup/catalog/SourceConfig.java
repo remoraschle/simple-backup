@@ -20,7 +20,8 @@ import java.util.UUID;
         @JsonSubTypes.Type(value = SourceConfig.Postgres.class, name = "POSTGRES"),
         @JsonSubTypes.Type(value = SourceConfig.GitHub.class, name = "GITHUB"),
         @JsonSubTypes.Type(value = SourceConfig.S3.class, name = "S3"),
-        @JsonSubTypes.Type(value = SourceConfig.Sftp.class, name = "SFTP")})
+        @JsonSubTypes.Type(value = SourceConfig.Sftp.class, name = "SFTP"),
+        @JsonSubTypes.Type(value = SourceConfig.BlockDevice.class, name = "BLOCK_DEVICE")})
 public sealed interface SourceConfig {
 
     SourceType type();
@@ -213,6 +214,52 @@ public sealed interface SourceConfig {
         @Override
         public SourceType type() {
             return SourceType.SFTP;
+        }
+    }
+
+    /**
+     * Ein ganzer Datentraeger als Abbild.
+     *
+     * <p>Gelesen wird roh, Block fuer Block. Das ist die einzige Art, ein System zu sichern,
+     * das sich nicht dateiweise erfassen laesst -- und zugleich die teuerste: Ein Abbild
+     * dedupliziert restic schlecht, und es enthaelt auch den Teil der Platte, der frei ist.
+     * Fuer "jede Nacht die ganze Platte" ist eine dateibasierte Quelle fast immer die
+     * bessere Antwort; dieses Werkzeug kann beides und sagt es dazu.
+     *
+     * @param device     Pfad des Geraets, etwa {@code /dev/sdb}. Muss ausdruecklich
+     *                   freigegeben sein -- siehe {@code simplebackup.engine.devices}.
+     * @param imageName  Dateiname des Abbilds im Snapshot. Ein sprechender Name hilft
+     *                   spaeter bei der Frage, welche Platte man da eigentlich vor sich hat.
+     * @param sparse     ob Nullbloecke als Loecher geschrieben werden. Spart auf einer halb
+     *                   leeren Platte ein Vielfaches, taugt aber nichts, wenn der freie
+     *                   Bereich alte Daten enthaelt statt Nullen.
+     */
+    record BlockDevice(
+            @NotBlank String device,
+            String imageName,
+            boolean sparse) implements SourceConfig {
+
+        public BlockDevice {
+            if (device == null || !device.startsWith("/dev/")) {
+                throw new IllegalArgumentException(
+                        "Ein Blockgeraet liegt unter /dev, angegeben war: " + device);
+            }
+            if (device.contains("..")) {
+                throw new IllegalArgumentException("Der Geraetepfad darf keine Rueckspruenge enthalten");
+            }
+            imageName = imageName == null || imageName.isBlank()
+                    ? device.substring(device.lastIndexOf('/') + 1) + ".img"
+                    : imageName;
+
+            if (imageName.contains("/")) {
+                throw new IllegalArgumentException(
+                        "Der Name des Abbilds ist ein Dateiname, kein Pfad: " + imageName);
+            }
+        }
+
+        @Override
+        public SourceType type() {
+            return SourceType.BLOCK_DEVICE;
         }
     }
 }

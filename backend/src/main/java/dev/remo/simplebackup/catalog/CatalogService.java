@@ -6,6 +6,7 @@ import dev.remo.simplebackup.catalog.CatalogViews.PlanView;
 import dev.remo.simplebackup.catalog.CatalogViews.SourceView;
 import dev.remo.simplebackup.catalog.CatalogViews.TargetReference;
 import dev.remo.simplebackup.catalog.CatalogViews.TargetView;
+import dev.remo.simplebackup.engine.DeviceAccess;
 import dev.remo.simplebackup.engine.MountTranslator;
 import dev.remo.simplebackup.engine.PathTranslationException;
 import dev.remo.simplebackup.shared.RetentionRule;
@@ -37,17 +38,20 @@ public class CatalogService {
     private final PlanRepository plans;
     private final RetentionPolicyRepository policies;
     private final MountTranslator mountTranslator;
+    private final DeviceAccess deviceAccess;
     private final NextRunCalculator nextRunCalculator;
     private final ObjectMapper objectMapper;
 
     CatalogService(SourceRepository sources, TargetRepository targets, PlanRepository plans,
             RetentionPolicyRepository policies, MountTranslator mountTranslator,
-            NextRunCalculator nextRunCalculator, ObjectMapper objectMapper) {
+            DeviceAccess deviceAccess, NextRunCalculator nextRunCalculator,
+            ObjectMapper objectMapper) {
         this.sources = sources;
         this.targets = targets;
         this.plans = plans;
         this.policies = policies;
         this.mountTranslator = mountTranslator;
+        this.deviceAccess = deviceAccess;
         this.nextRunCalculator = nextRunCalculator;
         this.objectMapper = objectMapper;
     }
@@ -122,6 +126,42 @@ public class CatalogService {
                 }
             }
         }
+        if (config instanceof SourceConfig.BlockDevice blockDevice) {
+            // Beim Anlegen und nicht erst beim ersten Lauf: Ein Geraet, das nicht
+            // freigegeben ist, wird es ueber Nacht nicht von selbst.
+            deviceAccess.require(blockDevice.device());
+        }
+    }
+
+    /**
+     * Welche Quelltypen sich anlegen lassen und warum nicht.
+     *
+     * <p>Die Oberflaeche soll einen Typ ausgrauen und die Begruendung daneben schreiben
+     * koennen, statt ein Anlegen anzubieten, das mit einer Fehlermeldung endet.
+     */
+    public List<CatalogViews.SourceTypeView> sourceTypes() {
+        return java.util.Arrays.stream(SourceType.values())
+                .map(type -> new CatalogViews.SourceTypeView(type, available(type), reasonFor(type)))
+                .toList();
+    }
+
+    /** Die freigegebenen Blockgeraete, damit man sie auswaehlt statt sie abzutippen. */
+    public List<String> availableDevices() {
+        return deviceAccess.allowed();
+    }
+
+    private boolean available(SourceType type) {
+        if (!type.isImplemented()) {
+            return false;
+        }
+        return type != SourceType.BLOCK_DEVICE || deviceAccess.available();
+    }
+
+    private String reasonFor(SourceType type) {
+        if (!type.isImplemented()) {
+            return "Dieser Quelltyp ist noch nicht umgesetzt.";
+        }
+        return type == SourceType.BLOCK_DEVICE ? deviceAccess.unavailableReason() : null;
     }
 
     // ------------------------------------------------------------------ Ziele

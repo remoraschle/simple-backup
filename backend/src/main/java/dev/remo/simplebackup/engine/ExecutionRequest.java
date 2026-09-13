@@ -22,6 +22,9 @@ import java.util.UUID;
  *                     ueber {@code docker inspect} lesbar. Dafuer ist {@code secretFiles} da.
  * @param secretFiles  Dateiname unterhalb von {@code /run/secrets} auf Klartext. Wird in ein
  *                     tmpfs geschrieben, das mit dem Container verschwindet.
+ * @param devices      Blockgeraete, die der Schritt lesen darf, als Pfade. Werden lesend
+ *                     durchgereicht -- nie ueber {@code privileged}, das dem Container
+ *                     gleich den ganzen Host oeffnete.
  * @param limits       Ressourcengrenzen
  * @param timeout      Obergrenze fuer die Laufzeit
  * @param labels       zusaetzliche Container-Labels
@@ -33,6 +36,7 @@ public record ExecutionRequest(
         List<VolumeMount> mounts,
         Map<String, String> environment,
         Map<String, String> secretFiles,
+        List<String> devices,
         ResourceLimits limits,
         Duration timeout,
         Map<String, String> labels) {
@@ -63,6 +67,7 @@ public record ExecutionRequest(
         mounts = mounts == null ? List.of() : List.copyOf(mounts);
         environment = environment == null ? Map.of() : Map.copyOf(environment);
         secretFiles = secretFiles == null ? Map.of() : Map.copyOf(secretFiles);
+        devices = devices == null ? List.of() : List.copyOf(devices);
         labels = labels == null ? Map.of() : Map.copyOf(labels);
     }
 
@@ -96,6 +101,7 @@ public record ExecutionRequest(
         private final java.util.LinkedHashMap<String, String> environment = new java.util.LinkedHashMap<>();
         private final java.util.LinkedHashMap<String, String> secretFiles = new java.util.LinkedHashMap<>();
         private final java.util.LinkedHashMap<String, String> labels = new java.util.LinkedHashMap<>();
+        private final java.util.ArrayList<String> devices = new java.util.ArrayList<>();
         private ResourceLimits limits = ResourceLimits.NONE;
         private Duration timeout = Duration.ofHours(6);
 
@@ -111,6 +117,12 @@ public record ExecutionRequest(
 
         public Builder mount(VolumeMount mount) {
             this.mounts.add(mount);
+            return this;
+        }
+
+        /** Reicht ein Blockgeraet lesend in den Schritt durch. */
+        public Builder device(String path) {
+            this.devices.add(path);
             return this;
         }
 
@@ -141,7 +153,7 @@ public record ExecutionRequest(
 
         public ExecutionRequest build() {
             return new ExecutionRequest(executionId, image, command, mounts, environment,
-                    secretFiles, limits, timeout, labels);
+                    secretFiles, devices, limits, timeout, labels);
         }
     }
 }

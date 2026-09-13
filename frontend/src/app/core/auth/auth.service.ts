@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, of, switchMap, tap } from 'rxjs';
-import { ANONYMOUS, SessionInfo } from './session-info';
+import { ANONYMOUS, LoginProviders, PASSWORD_ONLY, SessionInfo } from './session-info';
 
 /**
  * Haelt den Anmeldezustand.
@@ -35,6 +35,13 @@ export class AuthService {
         return of(ANONYMOUS);
       }),
     );
+  }
+
+  /** Öffentlich erreichbar: Die Anmeldeseite braucht die Auskunft, bevor jemand angemeldet ist. */
+  providers(): Observable<LoginProviders> {
+    return this.http
+      .get<LoginProviders>('/api/auth/providers')
+      .pipe(catchError(() => of(PASSWORD_ONLY)));
   }
 
   /**

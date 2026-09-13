@@ -81,6 +81,24 @@ class EngineConfiguration {
     }
 
     /**
+     * Wer welches Blockgeraet lesen darf.
+     *
+     * <p>Einmal beim Start beantwortet und nicht bei jedem Zugriff: Beides -- Betriebsmodus
+     * und Freigabeliste -- aendert sich nur mit einem Neustart des Daemons oder der
+     * Anwendung.
+     */
+    @Bean
+    DeviceAccess deviceAccess(DockerRuntime runtime, EngineProperties properties) {
+        var access = new DeviceAccess(runtime.supportsBlockDevices(),
+                runtime.blockDeviceUnavailableReason(), properties.devices());
+
+        if (access.available()) {
+            log.info("{} freigegebene Blockgeraete: {}", access.allowed().size(), access.allowed());
+        }
+        return access;
+    }
+
+    /**
      * Die Uebersetzung von Container- auf Host-Pfaden.
      *
      * <p>Laeuft die Anwendung nicht in einem Container, bleibt die Tabelle leer -- dann

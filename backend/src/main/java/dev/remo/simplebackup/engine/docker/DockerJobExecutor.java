@@ -157,7 +157,12 @@ public class DockerJobExecutor implements BackupExecutor {
                 false,
                 null,
                 // Verhindert, dass ein Prozess im Container ueber setuid Rechte hinzugewinnt.
-                List.of("no-new-privileges"));
+                List.of("no-new-privileges"),
+                // Nur lesend und nur die ausdruecklich genannten Geraete. Kein
+                // "privileged": Das reichte dem Container gleich den ganzen Host.
+                request.devices().stream()
+                        .map(device -> new DockerDto.DeviceMapping(device, device, "r"))
+                        .toList());
 
         return new DockerDto.CreateContainer(
                 request.image(),

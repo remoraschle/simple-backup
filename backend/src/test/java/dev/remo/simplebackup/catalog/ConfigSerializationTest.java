@@ -57,6 +57,49 @@ class ConfigSerializationTest {
         }
 
         @Test
+        @DisplayName("Ein Blockgeraet uebersteht die Umwandlung unveraendert")
+        void roundTripsBlockDevice() {
+            var original = new SourceConfig.BlockDevice("/dev/sdb", "systemplatte.img", true);
+
+            var restored = objectMapper.readValue(objectMapper.writeValueAsString(original),
+                    SourceConfig.class);
+
+            assertThat(restored).isEqualTo(original);
+            assertThat(restored.type()).isEqualTo(SourceType.BLOCK_DEVICE);
+        }
+
+        @Test
+        @DisplayName("Ohne Angabe bekommt das Abbild den Namen des Geraets")
+        void derivesImageName() {
+            assertThat(new SourceConfig.BlockDevice("/dev/sdb", null, false).imageName())
+                    .isEqualTo("sdb.img");
+        }
+
+        @Test
+        @DisplayName("Was nicht unter /dev liegt, ist kein Blockgeraet")
+        void rejectsNonDevicePath() {
+            assertThatThrownBy(() -> new SourceConfig.BlockDevice("/home/remo/platte.img", null, false))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("/dev");
+        }
+
+        @Test
+        @DisplayName("Rueckspruenge im Geraetepfad werden abgelehnt")
+        void rejectsTraversalInDevicePath() {
+            assertThatThrownBy(() -> new SourceConfig.BlockDevice("/dev/../etc/shadow", null, false))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("Der Name des Abbilds ist ein Dateiname, kein Pfad")
+        void rejectsPathAsImageName() {
+            // Sonst schriebe dd irgendwohin, nur nicht ins Zwischenverzeichnis.
+            assertThatThrownBy(() -> new SourceConfig.BlockDevice("/dev/sdb", "../../etc/passwd", false))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Dateiname");
+        }
+
+        @Test
         @DisplayName("Die Listen sind nach dem Anlegen unveraenderlich")
         void listsAreImmutable() {
             var config = new SourceConfig.LocalPath(new java.util.ArrayList<>(List.of("/a")), null, false);
@@ -153,8 +196,8 @@ class ConfigSerializationTest {
             assertThat(SourceType.GITHUB.isImplemented()).isTrue();
             assertThat(SourceType.S3.isImplemented()).isTrue();
             assertThat(SourceType.SFTP.isImplemented()).isTrue();
-            // Noch offen: Blockgeraete und FTP.
-            assertThat(SourceType.BLOCK_DEVICE.isImplemented()).isFalse();
+            assertThat(SourceType.BLOCK_DEVICE.isImplemented()).isTrue();
+            // Noch offen: reines FTP.
             assertThat(SourceType.FTP.isImplemented()).isFalse();
             assertThat(TargetType.S3.isImplemented()).isTrue();
             assertThat(TargetType.SFTP.isImplemented()).isFalse();

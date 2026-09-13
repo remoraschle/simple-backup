@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -29,6 +30,24 @@ export class Login {
 
   protected readonly submitting = signal(false);
   protected readonly failed = signal(false);
+
+  /**
+   * Ob es einen zweiten Anmeldeweg gibt.
+   *
+   * <p>Die Auskunft kommt vom Backend: Nur dort steht, ob ein Anbieter eingerichtet ist.
+   */
+  protected readonly providers = toSignal(this.auth.providers(), {
+    initialValue: { oidcEnabled: false, displayName: null, authorizationUrl: null },
+  });
+
+  /**
+   * Fehlschlag beim Anbieter.
+   *
+   * <p>Der Anbieter schickt den Browser mit einer Begründung hierher zurück. Ohne sie
+   * stünde man wortlos wieder auf der Anmeldeseite und hielte es für einen Fehler der
+   * Anwendung.
+   */
+  protected readonly providerError = this.route.snapshot.queryParamMap.get('fehler');
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
     username: ['', Validators.required],

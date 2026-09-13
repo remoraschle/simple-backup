@@ -1,0 +1,28 @@
+# Anmeldung ueber einen Anbieter (Authelia, Keycloak, Authentik).
+#
+# Als eigenes Profil und nicht als Teil der Grundkonfiguration: Eine Registrierung ohne
+# client-id laesst Spring Boot beim Start scheitern, und leere Platzhalter waeren genau das.
+# Wer diesen Weg will, schaltet das Profil ein -- und dann muessen die Werte da sein.
+#
+#     SPRING_PROFILES_ACTIVE=oidc
+#     SIMPLEBACKUP_OIDC_ISSUER=https://auth.example.org
+#     SIMPLEBACKUP_OIDC_CLIENT_ID=simple-backup
+#     SIMPLEBACKUP_OIDC_CLIENT_SECRET=...
+#
+# Ohne dieses Profil gibt es kein ClientRegistrationRepository, die Sicherheitskonfiguration
+# haengt den Anmeldeweg gar nicht erst ein, und die Anmeldeseite zeigt den Knopf nicht.
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          oidc:
+            client-id: ${SIMPLEBACKUP_OIDC_CLIENT_ID}
+            client-secret: ${SIMPLEBACKUP_OIDC_CLIENT_SECRET}
+            # "groups" ist bei Authelia und Authentik der uebliche Bereich fuer die
+            # Gruppenmitgliedschaft; Keycloak braucht dafuer einen Mapper.
+            scope: openid,profile,email,groups
+        provider:
+          oidc:
+            # Alles Weitere findet Spring ueber das Discovery-Dokument des Anbieters.
+            issuer-uri: ${SIMPLEBACKUP_OIDC_ISSUER}

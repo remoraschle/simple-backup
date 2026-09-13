@@ -81,6 +81,21 @@ services:
       SIMPLEBACKUP_COOKIE_SECURE: ${COOKIE_SECURE:-false}
       DOCKER_HOST: tcp://dockerproxy:2375
       TZ: ${TZ:-Europe/Zurich}
+      # Freigegebene Blockgeraete, durch Komma getrennt. Leer heisst: keine.
+      SIMPLEBACKUP_DEVICES: ${DEVICES:-}
+      # Anmeldung ueber einen Anbieter: Profil "oidc" einschalten und die drei Werte
+      # setzen. Ohne das Profil bleibt es beim Formular, und der Knopf erscheint nicht.
+      #   SPRING_PROFILES_ACTIVE=oidc
+      #   SIMPLEBACKUP_OIDC_ISSUER=https://auth.example.org
+      #   SIMPLEBACKUP_OIDC_CLIENT_ID=simple-backup
+      #   SIMPLEBACKUP_OIDC_CLIENT_SECRET=...
+      #   SIMPLEBACKUP_OIDC_ADMIN_GROUP=backup-admins   (optional, sonst nur Leserechte)
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES:-}
+      SIMPLEBACKUP_OIDC_ISSUER: ${OIDC_ISSUER:-}
+      SIMPLEBACKUP_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      SIMPLEBACKUP_OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      SIMPLEBACKUP_OIDC_ADMIN_GROUP: ${OIDC_ADMIN_GROUP:-}
+      SIMPLEBACKUP_OIDC_REQUIRED_GROUP: ${OIDC_REQUIRED_GROUP:-}
     secrets:
       - master_key
     volumes:
@@ -100,6 +115,18 @@ services:
       # ------------------------------------------------------------------------------
       # - /srv/fotos:/sources/fotos:ro
       # - /mnt/nas:/mnt/nas
+
+    # --------------------------------------------------------------------------------
+    # Ganze Datentraeger sichern (Abbild). Nur mit einem Docker-Daemon mit Wurzelrechten;
+    # rootless kann kein Geraet durchreichen, und die Oberflaeche bietet den Quelltyp dort
+    # gar nicht erst an.
+    #
+    # Zwei Stellen, beide noetig: hier das Geraet durchreichen, und in
+    # SIMPLEBACKUP_DEVICES dasselbe Geraet freigeben. Niemals privileged -- das gaebe dem
+    # Container gleich den ganzen Host.
+    # --------------------------------------------------------------------------------
+    # devices:
+    #   - /dev/sdb:/dev/sdb:r
     networks: [internal]
 
   web:

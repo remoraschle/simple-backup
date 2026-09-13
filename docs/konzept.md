@@ -211,10 +211,13 @@ erDiagram
 - **Sicherheit:** SSH-Hostkey wird beim Anlegen der Quelle erfasst und fest hinterlegt; `StrictHostKeyChecking=yes` gegen eine tool-eigene `known_hosts`. Kein `-o StrictHostKeyChecking=no`, nie.
 - Reines FTP (unverschlüsselt) wird unterstützt, aber in der UI als unsicher markiert.
 
-### 5.6 Blockdevices / ganze Festplatten
-- **Producer:** `dd if=/dev/sdX bs=4M | zstd -T0` in eine Pipe → `restic backup --stdin`. Bei ext4/xfs besser `partclone`/`e2image` (überspringt freie Blöcke, drastisch kleiner und schneller).
-- **Voraussetzung:** Das Device muss in den Container gereicht werden (`devices:` in Compose) — kein `privileged: true`. Das Dateisystem sollte ausgehängt oder read-only sein, sonst ist das Image inkonsistent.
-- **Ehrliche Einordnung:** Image-Backups dedupliziert restic schlecht (ein verschobenes Byte verschiebt alle Chunks — teilweise entschärft durch restics inhaltsbasiertes Chunking, aber komprimierte Streams sind gar nicht dedupliziertbar). Für „ganze Platte regelmäßig" ist dateibasiertes Backup fast immer die bessere Antwort. Das Tool unterstützt beides und sagt das in der UI.
+### 5.6 Blockdevices / ganze Festplatten *(umgesetzt)*
+- **Producer:** `dd if=/dev/sdX of=<staging>/<name>.img bs=4M` (optional `conv=sparse`), danach sichert restic die Datei wie jede andere.
+- **Abweichung vom ersten Entwurf:** Ursprünglich war eine Pipe nach `restic backup --stdin` vorgesehen. Das verträgt sich nicht mit der zweistufigen Pipeline: Ein Plan schreibt auf **mehrere** Ziele, und ein Strom lässt sich nicht zweimal lesen. Die Quelle einmal zu beschaffen und das Ergebnis auf alle Ziele zu schreiben, ist der Kern dieses Entwurfs — der Preis ist Platz im Zwischenverzeichnis, und den nennt die Oberfläche beim Anlegen.
+- **Keine Vorkompression:** restic komprimiert selbst. Ein vorher durch `zstd` geschobener Strom wäre für die Deduplizierung nur noch Rauschen — zwei Läufe derselben, kaum veränderten Platte hätten danach nichts mehr gemeinsam.
+- **Voraussetzung:** Das Gerät muss in den Container gereicht werden (`devices:` in Compose, lesend) **und** unter `simplebackup.engine.devices` freigegeben sein. Standardmäßig ist die Liste leer: Ohne sie entschiede der Inhalt eines Formularfelds darüber, welche Platte roh gelesen wird. Kein `privileged: true`. Das Dateisystem sollte ausgehängt oder read-only sein, sonst ist das Image inkonsistent.
+- **Ehrliche Einordnung:** Image-Backups dedupliziert restic schlecht (ein verschobenes Byte verschiebt alle Chunks — teilweise entschärft durch restics inhaltsbasiertes Chunking). Für „ganze Platte regelmäßig" ist dateibasiertes Backup fast immer die bessere Antwort. Das Tool unterstützt beides und sagt das in der UI.
+- **Offen:** `partclone`/`e2image` überspringen freie Blöcke und wären bei ext4/xfs deutlich schneller und kleiner. `dd` ist die Antwort, die für jedes Dateisystem gilt.
 
 ---
 
@@ -449,7 +452,13 @@ Zu schützen: GitHub-PATs, S3-Keys, SSH-Keys, DB-Passwörter, restic-Repository-
   beantwortet die API nur Sitzungsabfrage, Passwortwechsel und Abmelden — sonst reichte das einmalig
   protokollierte Startpasswort für einen `curl`-Aufruf an der Oberfläche vorbei.
 - TOTP-2FA als kleines, lohnendes Extra.
-- **Später:** OIDC (Authelia/Keycloak/Authentik) — im Homelab-Umfeld häufig vorhanden.
+- **OIDC** (Authelia/Keycloak/Authentik) als zweiter Anmeldeweg, eingeschaltet über das Profil `oidc`.
+  Ohne konfigurierten Anbieter existiert der Weg gar nicht — kein Knopf, der ins Leere führt.
+  Der Anbieter sagt, **wer** jemand ist; was er darf, entscheidet diese Anwendung: Wer sich zum
+  ersten Mal anmeldet, bekommt Leserechte. Administrator wird niemand allein dadurch, dass er
+  sich anmeldet. Ist eine Administratorgruppe konfiguriert, folgt die Rolle dem Anbieter — auch
+  nach unten, denn wem dort die Gruppe entzogen wurde, der darf hier nicht Administrator bleiben.
+  Ein in dieser Anwendung abgeschaltetes Konto kommt auch über diesen Weg nicht herein.
 - Rollen v1: `ADMIN` (alles) und `VIEWER` (nur lesen). Mehr erst, wenn jemand mehr braucht.
 
 ### 9.3 Härtung
@@ -594,7 +603,7 @@ simple-backup/
 | **M4 — Wiederherstellung** ✅ | TreeTable auf CDK-Basis, Snapshot-Browser, Restore, Datei-Download, `restic check`, automatischer Restore-Test | Backups sind nachweislich gut |
 | **M5 — Postgres & GitHub** ✅ | pg_dump-Pipeline mit versionspassendem Runner, Globals, Dump-Verifikation, GitHub-Discovery + Mirror + Metadaten | Die beiden wertvollsten Quellen |
 | **M6 — S3, SFTP, rsync-Mirror** ✅ | rclone-Adapter, Hostkey-Handling, Mirror-Modus | Quellmatrix im Wesentlichen vollständig |
-| **M7 — Kür** | Blockdevices (nur rootful), Prometheus, OIDC, Konfig-Export/Import, weitere Alarmkanäle | Betriebsreif |
+| **M7 — Kür** ✅ | Prometheus-Kennzahlen je Plan, Konfig-Export/Import als passwortgeschütztes Archiv, Blockdevices (nur rootful, nur freigegebene Geräte), OIDC als zweiter Anmeldeweg | Betriebsreif |
 
 M1 ist wegen der Sidecar-Entscheidung ein eigener Meilenstein und kein Nebenprodukt: Host-Pfad-Übersetzung, Wiederanhängen nach Neustart und das Aufräumen verwaister Container sind die Stellen, an denen dieses Modell scheitert, wenn man sie nebenbei erledigt. Einmal sauber gebaut, ist danach jede weitere Quelle nur noch eine Argumentliste.
 

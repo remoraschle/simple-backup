@@ -74,4 +74,13 @@ public final class CatalogViews {
 
     public record TargetReference(UUID id, String name, TargetMode mode) {
     }
+
+    /**
+     * Ob sich ein Quelltyp hier anlegen laesst.
+     *
+     * @param unavailableReason in ganzen Saetzen, oder {@code null}. Ein ausgegrauter
+     *                          Eintrag ohne Begruendung ist eine Sackgasse.
+     */
+    public record SourceTypeView(SourceType type, boolean available, String unavailableReason) {
+    }
 }

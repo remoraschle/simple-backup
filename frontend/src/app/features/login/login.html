@@ -46,6 +46,30 @@
           Anmelden
         </button>
       </form>
+
+      @if (providers(); as login) {
+        @if (login.oidcEnabled && login.authorizationUrl) {
+          <div class="my-4 flex items-center gap-3 text-sm text-on-surface-variant">
+            <span class="h-px flex-1 bg-outline-variant"></span>
+            oder
+            <span class="h-px flex-1 bg-outline-variant"></span>
+          </div>
+
+          <!-- Ein echter Link und kein Knopf mit Klick-Handler: Der Weg zum Anbieter führt
+               aus der Anwendung heraus, nicht durch den Router. -->
+          <a matButton="outlined" class="w-full" [href]="login.authorizationUrl">
+            <mat-icon>login</mat-icon>
+            Mit {{ login.displayName }} anmelden
+          </a>
+        }
+      }
+
+      @if (providerError) {
+        <p class="mt-4 mb-0 flex items-start gap-2 text-sm text-error" role="alert">
+          <mat-icon class="text-base">error_outline</mat-icon>
+          {{ providerError }}
+        </p>
+      }
     </mat-card-content>
   </mat-card>
 </div>

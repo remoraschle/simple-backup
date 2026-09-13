@@ -7,8 +7,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { CatalogService } from '../../core/api/catalog.service';
 import { CredentialsService } from '../../core/api/credentials.service';
-import { SourceType } from '../../core/api/models';
+import { SourceType, SourceTypeInfo } from '../../core/api/models';
 
 /**
  * Anlegen einer Quelle.
@@ -32,8 +33,19 @@ import { SourceType } from '../../core/api/models';
 export class SourceDialog {
   private readonly dialogRef = inject(MatDialogRef<SourceDialog>);
   private readonly credentials = inject(CredentialsService);
+  private readonly catalog = inject(CatalogService);
 
   private readonly allCredentials = toSignal(this.credentials.list(), { initialValue: [] });
+
+  /**
+   * Was das Backend hier anlegen lässt.
+   *
+   * <p>Vom Server und nicht aus einer Liste im Frontend: Ob sich ein Blockgerät sichern
+   * lässt, hängt vom Docker-Daemon und von der Freigabe ab — das weiß nur das Backend.
+   */
+  private readonly typeInfo = toSignal(this.catalog.sourceTypes(), { initialValue: [] });
+
+  protected readonly devices = toSignal(this.catalog.devices(), { initialValue: [] });
 
   protected readonly passwords = computed(() =>
     this.allCredentials().filter((credential) => credential.type === 'PASSWORD'),
@@ -61,7 +73,21 @@ export class SourceDialog {
     { value: 'GITHUB', label: 'GitHub-Repositories' },
     { value: 'S3', label: 'S3-Bucket' },
     { value: 'SFTP', label: 'SFTP-Server' },
+    { value: 'BLOCK_DEVICE', label: 'Ganzer Datenträger (Abbild)' },
   ];
+
+  /** Solange die Auskunft nicht da ist, wird nichts gesperrt -- sonst flackert das Formular. */
+  private info(type: SourceType): SourceTypeInfo | undefined {
+    return this.typeInfo().find((entry) => entry.type === type);
+  }
+
+  protected unavailable(type: SourceType): boolean {
+    return this.info(type)?.available === false;
+  }
+
+  protected reasonFor(type: SourceType): string | null {
+    return this.info(type)?.unavailableReason ?? null;
+  }
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(100)]],
@@ -103,6 +129,11 @@ export class SourceDialog {
     remotePath: [''],
     hostKey: [''],
     sshKeyCredentialId: [''],
+
+    // Blockgerät
+    device: [''],
+    imageName: [''],
+    sparse: [true],
   });
 
   /** Ob die Angaben zum gewählten Typ vollständig sind. */
@@ -118,6 +149,8 @@ export class SourceDialog {
         return Boolean(value.owner && value.tokenCredentialId);
       case 'S3':
         return Boolean(value.endpoint && value.bucket && value.s3CredentialId);
+      case 'BLOCK_DEVICE':
+        return Boolean(value.device);
       default:
         return Boolean(
           value.sftpHost &&
@@ -179,6 +212,13 @@ export class SourceDialog {
           prefix: value.prefix || null,
           region: value.region || null,
           credentialId: value.s3CredentialId,
+        };
+      case 'BLOCK_DEVICE':
+        return {
+          type: 'BLOCK_DEVICE',
+          device: value.device,
+          imageName: value.imageName || null,
+          sparse: value.sparse,
         };
       default:
         return {

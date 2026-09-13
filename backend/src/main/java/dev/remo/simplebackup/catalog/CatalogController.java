@@ -44,6 +44,25 @@ class CatalogController {
         return catalog.listSources();
     }
 
+    /**
+     * Was sich anlegen laesst.
+     *
+     * <p>Nicht jeder Quelltyp kann ueberall: Ein Blockgeraet braucht einen Docker-Daemon
+     * mit Wurzelrechten und eine ausdrueckliche Freigabe. Das weiss nur das Backend, und
+     * die Oberflaeche soll einen Typ ausgrauen koennen, statt ein Anlegen anzubieten, das
+     * mit einer Fehlermeldung endet.
+     */
+    @GetMapping("/sources/types")
+    List<CatalogViews.SourceTypeView> sourceTypes() {
+        return catalog.sourceTypes();
+    }
+
+    /** Die freigegebenen Blockgeraete. */
+    @GetMapping("/sources/devices")
+    List<String> devices() {
+        return catalog.availableDevices();
+    }
+
     @GetMapping("/sources/{id}")
     SourceView getSource(@PathVariable UUID id) {
         return catalog.getSource(id);

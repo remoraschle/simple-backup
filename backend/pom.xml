@@ -84,6 +84,16 @@
             <groupId>org.springframework.session</groupId>
             <artifactId>spring-session-jdbc</artifactId>
         </dependency>
+        <!--
+            OIDC als zweiter Anmeldeweg. Bleibt ohne konfigurierten Anbieter vollstaendig
+            untaetig: Ohne Registrierung legt Spring Boot kein ClientRegistrationRepository
+            an, und ohne das wird die Anmeldung ueber einen Anbieter gar nicht erst
+            eingehaengt.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>

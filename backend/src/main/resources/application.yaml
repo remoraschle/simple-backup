@@ -27,6 +27,10 @@ spring:
       initialize-schema: never
     timeout: 12h
 
+  # Anmeldung ueber einen Anbieter (Authelia, Keycloak, Authentik): siehe das Profil
+  # "oidc" in application-oidc.yaml. Absichtlich nicht hier mit leeren Platzhaltern -- eine
+  # Registrierung ohne client-id laesst die Anwendung beim Start scheitern.
+
   threads:
     virtual:
       # Ein Backup-Lauf wartet fast ausschliesslich auf einen Kindprozess.
@@ -73,6 +77,11 @@ simplebackup:
     # "docker" fuehrt jeden Schritt in einem eigenen Container aus (Betrieb),
     # "local" als Kindprozess des Backends (nur Entwicklung, ohne Isolierung).
     executor: ${SIMPLEBACKUP_EXECUTOR:docker}
+    # Blockgeraete, die als Quelle gesichert werden duerfen -- einzeln und vollstaendig.
+    # Standardmaessig leer: Ein Geraet durchzureichen macht den rohen Inhalt einer Platte
+    # lesbar. Wer das will, sagt es hier ausdruecklich und reicht das Geraet zusaetzlich in
+    # der Compose-Datei unter "devices:" durch. Niemals ueber privileged.
+    devices: ${SIMPLEBACKUP_DEVICES:}
 
   docker:
     # Zeigt auf den Socket-Proxy, niemals unmittelbar auf /var/run/docker.sock.
@@ -140,6 +149,21 @@ simplebackup:
     batch-size: 20
     # Leer lassen: Dann gilt die echte Adresse von Pushover. Nur Tests biegen sie um.
     pushover-endpoint: ${SIMPLEBACKUP_PUSHOVER_ENDPOINT:}
+
+  oidc:
+    # Wie eine Anmeldung beim Anbieter auf einen Benutzer hier abgebildet wird.
+    display-name: ${SIMPLEBACKUP_OIDC_NAME:Single Sign-on}
+    # Der Anspruch muss stabil sein: Aendert er sich beim Anbieter, entsteht hier ein
+    # zweiter Benutzer statt einer Umbenennung.
+    username-claim: ${SIMPLEBACKUP_OIDC_USERNAME_CLAIM:preferred_username}
+    groups-claim: ${SIMPLEBACKUP_OIDC_GROUPS_CLAIM:groups}
+    # Wer hierin ist, wird Administrator, alle anderen duerfen nur lesen. Ohne Angabe
+    # bekommt ein neuer Benutzer Leserechte und ein bekannter behaelt seine Rolle -- eine
+    # Anmeldung soll niemanden versehentlich zum Administrator machen.
+    admin-group: ${SIMPLEBACKUP_OIDC_ADMIN_GROUP:}
+    # Wer hierin nicht ist, kommt gar nicht herein. Ohne Angabe darf jeder herein, den der
+    # Anbieter durchlaesst.
+    required-group: ${SIMPLEBACKUP_OIDC_REQUIRED_GROUP:}
 
   secrets:
     # Genau eine der beiden Quellen muss gesetzt sein. Die Datei-Variante ist

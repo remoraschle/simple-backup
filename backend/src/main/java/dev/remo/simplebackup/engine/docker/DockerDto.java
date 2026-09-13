@@ -38,7 +38,22 @@ final class DockerDto {
             @JsonProperty("AutoRemove") boolean autoRemove,
             @JsonProperty("ReadonlyRootfs") boolean readonlyRootfs,
             @JsonProperty("CapDrop") List<String> capDrop,
-            @JsonProperty("SecurityOpt") List<String> securityOpt) {
+            @JsonProperty("SecurityOpt") List<String> securityOpt,
+            @JsonProperty("Devices") List<DeviceMapping> devices) {
+    }
+
+    /**
+     * Ein durchgereichtes Blockgeraet.
+     *
+     * @param permissions Rechte im cgroup-Sinn: {@code r} lesen, {@code w} schreiben,
+     *                    {@code m} Geraeteknoten anlegen. Ein Sicherungswerkzeug braucht
+     *                    nur {@code r} -- und was es nicht darf, kann es auch nicht
+     *                    versehentlich tun.
+     */
+    record DeviceMapping(
+            @JsonProperty("PathOnHost") String pathOnHost,
+            @JsonProperty("PathInContainer") String pathInContainer,
+            @JsonProperty("CgroupPermissions") String permissions) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

@@ -108,6 +108,8 @@ export class Sources {
         return `${source.config.bucket}${source.config.prefix ? '/' + source.config.prefix : ''} auf ${
           source.config.endpoint
         }`;
+      case 'BLOCK_DEVICE':
+        return `${source.config.device} → ${source.config.imageName}`;
       default:
         return `${source.config.username}@${source.config.host}:${source.config.path}`;
     }
@@ -125,6 +127,8 @@ export class Sources {
         return 'S3';
       case 'SFTP':
         return 'SFTP';
+      case 'BLOCK_DEVICE':
+        return 'Datenträger';
       default:
         return source.type;
     }

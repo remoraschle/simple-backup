@@ -1,12 +1,22 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Plan, RetentionPolicy, Source, Target } from './models';
+import { Plan, RetentionPolicy, Source, SourceTypeInfo, Target } from './models';
 
 /** Zugriff auf Quellen, Ziele, Pläne und Aufbewahrungsregeln. */
 @Injectable({ providedIn: 'root' })
 export class CatalogService {
   private readonly http = inject(HttpClient);
+
+  /** Welche Quelltypen sich hier anlegen lassen -- und warum die anderen nicht. */
+  sourceTypes(): Observable<SourceTypeInfo[]> {
+    return this.http.get<SourceTypeInfo[]>('/api/sources/types');
+  }
+
+  /** Die freigegebenen Blockgeräte, damit man sie auswählt statt sie abzutippen. */
+  devices(): Observable<string[]> {
+    return this.http.get<string[]>('/api/sources/devices');
+  }
 
   listSources(): Observable<Source[]> {
     return this.http.get<Source[]>('/api/sources');

@@ -1,4 +1,6 @@
 {
   "/api": { "target": "http://localhost:8081", "secure": false },
-  "/actuator": { "target": "http://localhost:8081", "secure": false }
+  "/actuator": { "target": "http://localhost:8081", "secure": false },
+  "/oauth2": { "target": "http://localhost:8081", "secure": false },
+  "/login/oauth2": { "target": "http://localhost:8081", "secure": false }
 }

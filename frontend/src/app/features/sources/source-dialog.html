@@ -12,9 +12,14 @@
       <mat-label>Art</mat-label>
       <mat-select formControlName="type">
         @for (type of types; track type.value) {
-          <mat-option [value]="type.value">{{ type.label }}</mat-option>
+          <mat-option [value]="type.value" [disabled]="unavailable(type.value)">
+            {{ type.label }}
+          </mat-option>
         }
       </mat-select>
+      @if (reasonFor(form.controls.type.value); as reason) {
+        <mat-hint class="text-error">{{ reason }}</mat-hint>
+      }
     </mat-form-field>
 
     <mat-form-field>
@@ -269,6 +274,48 @@
         <mat-slide-toggle formControlName="includeForks" class="mt-4">
           Geforkte Repositories mitsichern
         </mat-slide-toggle>
+      }
+
+      @case ('BLOCK_DEVICE') {
+        <div
+          class="mt-2 rounded-lg border border-outline-variant bg-surface-container p-3 text-sm text-on-surface-variant"
+        >
+          Ein Abbild liest den Datenträger Block für Block — auch den freien Teil. Es lässt sich
+          schlecht deduplizieren und braucht während des Laufs so viel Platz im Zwischenverzeichnis,
+          wie die Platte belegt. Für „jede Nacht die ganze Platte“ ist eine dateibasierte Quelle
+          fast immer die bessere Antwort; für einen Bootsektor oder ein fremdes Dateisystem gibt es
+          nur diesen Weg.
+        </div>
+
+        <mat-form-field class="mt-4">
+          <mat-label>Datenträger</mat-label>
+          <mat-select formControlName="device">
+            @for (device of devices(); track device) {
+              <mat-option [value]="device">{{ device }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>
+            Zur Auswahl steht nur, was ausdrücklich freigegeben wurde. Ein Gerät, das hier fehlt,
+            gehört in die Konfiguration und in die Compose-Datei — nicht in dieses Formular.
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field class="mt-4">
+          <mat-label>Name des Abbilds</mat-label>
+          <input matInput formControlName="imageName" placeholder="systemplatte.img" />
+          <mat-hint>
+            Leer lassen, dann heißt es wie das Gerät. Ein sprechender Name hilft bei der Frage,
+            welche Platte man da eigentlich vor sich hat.
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-slide-toggle formControlName="sparse" class="mt-6">
+          Nullblöcke als Löcher schreiben
+        </mat-slide-toggle>
+        <p class="mt-1 mb-0 text-sm text-on-surface-variant">
+          Spart auf einer halb leeren Platte ein Vielfaches. Nützt nichts, wenn der freie Bereich
+          alte Daten statt Nullen enthält — dann bleibt das Abbild so groß wie die Platte.
+        </p>
       }
     }
   </form>
