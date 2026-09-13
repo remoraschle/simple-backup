@@ -100,10 +100,8 @@ class EndToEndBackupTest {
                 testProperties());
     }
 
-    /** Kurze Zeitlimits: Ein Test soll nicht stundenlang auf ein Aufraeumen warten. */
     private static RunProperties testProperties() {
-        return new RunProperties(null, null, 2, null, null, Duration.ofMinutes(2), null, null,
-                null, null, null, null);
+        return TestRunProperties.defaults().pruneTimeout(Duration.ofMinutes(2)).build();
     }
 
     private ExecutablePlan plan() {

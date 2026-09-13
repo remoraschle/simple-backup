@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
@@ -47,6 +48,15 @@ public class LocalProcessExecutor implements BackupExecutor {
 
     private final SecretRedactor redactor;
 
+    /**
+     * Was aus der Umgebung des Backends uebernommen wird.
+     *
+     * <p>Mehr braucht kein Werkzeug: Der Pfad, um es zu finden, das Heimatverzeichnis fuer
+     * Git und die Angaben zu Sprache und Zeitzone, damit Ausgaben und Zeitstempel stimmen.
+     */
+    private static final Set<String> PASSED_THROUGH =
+            Set.of("PATH", "HOME", "TMPDIR", "TZ", "LANG", "LC_ALL", "USER", "SHELL");
+
     public LocalProcessExecutor(SecretRedactor redactor) {
         this.redactor = redactor;
     }
@@ -67,6 +77,13 @@ public class LocalProcessExecutor implements BackupExecutor {
             // Ohne diese Uebersetzung liefe ein Werkzeug, das seine Zugangsdaten aus einer
             // Datei liest, unweigerlich ins Leere.
             ProcessBuilder builder = new ProcessBuilder(rewriteSecretPaths(request.command(), secretsPath));
+
+            // Die Umgebung wird auf das Noetigste eingedampft, statt die des Backends zu
+            // erben. Ein Container startet mit der Umgebung seines Images; ein Kindprozess
+            // erbt sonst alles, was zufaellig gesetzt ist -- Proxy-Angaben, CA-Pfade,
+            // AWS-Variablen. Werkzeuge lesen genau solche Variablen mit, und dann verhaelt
+            // sich der Entwicklungsbetrieb anders als der Ernstfall.
+            builder.environment().keySet().retainAll(PASSED_THROUGH);
 
             request.environment().forEach((name, value) ->
                     builder.environment().put(name, rewriteSecretPath(value, secretsPath)));

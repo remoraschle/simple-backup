@@ -20,8 +20,8 @@ class GitHubApiTest {
     void setUp() {
         github = new FakeGitHub();
         api = new GitHubApi(HttpClient.newHttpClient(), new ObjectMapper(),
-                new RunProperties(null, null, 2, null, null, null, null, null,
-                        Duration.ofMinutes(1), null, null, github.baseUrl()));
+                TestRunProperties.defaults().acquireTimeout(Duration.ofMinutes(1))
+                        .githubApiUrl(github.baseUrl()).build());
     }
 
     @AfterEach

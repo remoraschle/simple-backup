@@ -72,7 +72,32 @@ export interface GitHubSourceConfig {
   readonly credentialId: string;
 }
 
-export type SourceConfig = LocalPathSourceConfig | PostgresSourceConfig | GitHubSourceConfig;
+export interface S3SourceConfig {
+  readonly type: 'S3';
+  readonly endpoint: string;
+  readonly bucket: string;
+  readonly prefix: string | null;
+  readonly region: string;
+  readonly credentialId: string;
+}
+
+export interface SftpSourceConfig {
+  readonly type: 'SFTP';
+  readonly host: string;
+  readonly port: number;
+  readonly username: string;
+  readonly path: string;
+  /** Eine Zeile im Format von known_hosts. Pflicht — sonst wird gar nicht verbunden. */
+  readonly hostKey: string;
+  readonly credentialId: string;
+}
+
+export type SourceConfig =
+  | LocalPathSourceConfig
+  | PostgresSourceConfig
+  | GitHubSourceConfig
+  | S3SourceConfig
+  | SftpSourceConfig;
 
 export interface LocalPathTargetConfig {
   readonly type: 'LOCAL_PATH';

@@ -98,12 +98,18 @@ export class Sources {
             ? 'alle Datenbanken'
             : source.config.databases.join(', ')
         }`;
-      default:
+      case 'GITHUB':
         return `${source.config.owner} — ${
           source.config.repositories.length === 0
             ? 'alle Repositories'
             : source.config.repositories.join(', ')
         }`;
+      case 'S3':
+        return `${source.config.bucket}${source.config.prefix ? '/' + source.config.prefix : ''} auf ${
+          source.config.endpoint
+        }`;
+      default:
+        return `${source.config.username}@${source.config.host}:${source.config.path}`;
     }
   }
 
@@ -115,6 +121,10 @@ export class Sources {
         return 'PostgreSQL';
       case 'GITHUB':
         return 'GitHub';
+      case 'S3':
+        return 'S3';
+      case 'SFTP':
+        return 'SFTP';
       default:
         return source.type;
     }

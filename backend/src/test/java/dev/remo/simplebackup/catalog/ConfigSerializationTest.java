@@ -151,7 +151,11 @@ class ConfigSerializationTest {
             assertThat(SourceType.LOCAL_PATH.isImplemented()).isTrue();
             assertThat(SourceType.POSTGRES.isImplemented()).isTrue();
             assertThat(SourceType.GITHUB.isImplemented()).isTrue();
-            assertThat(SourceType.S3.isImplemented()).isFalse();
+            assertThat(SourceType.S3.isImplemented()).isTrue();
+            assertThat(SourceType.SFTP.isImplemented()).isTrue();
+            // Noch offen: Blockgeraete und FTP.
+            assertThat(SourceType.BLOCK_DEVICE.isImplemented()).isFalse();
+            assertThat(SourceType.FTP.isImplemented()).isFalse();
             assertThat(TargetType.S3.isImplemented()).isTrue();
             assertThat(TargetType.SFTP.isImplemented()).isFalse();
         }

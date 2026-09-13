@@ -3,6 +3,18 @@ spring:
     hibernate:
       ddl-auto: validate
 
+  datasource:
+    hikari:
+      # Jede Testklasse mit eigener Konfiguration bekommt einen eigenen Spring-Kontext und
+      # damit einen eigenen Verbindungspool. Mit dem Standard von zehn Verbindungen je Pool
+      # sind die Plaetze der Datenbank nach einer Handvoll Kontexte belegt -- und dann
+      # scheitern Tests an etwas, das mit ihnen nichts zu tun hat.
+      maximum-pool-size: 3
+      minimum-idle: 0
+      # Ungenutzte Verbindungen zuegig zurueckgeben, damit spaetere Kontexte wieder welche
+      # bekommen.
+      idle-timeout: 10000
+
 simplebackup:
   run:
     log-directory: ${java.io.tmpdir:/tmp}/simple-backup-test-logs

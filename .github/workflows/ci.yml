@@ -28,10 +28,14 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
 
-      # Fuer den End-to-End-Test: Er sichert wirklich und stellt wirklich wieder her.
-      # Ohne restic wird er uebersprungen -- dann liefe die wichtigste Pruefung ins Leere.
-      - name: restic installieren
-        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends restic
+      # Fuer die End-to-End-Tests: Sie sichern wirklich, stellen wirklich wieder her und
+      # sprechen mit einem echten S3-Server. Fehlt eines der Werkzeuge, werden die
+      # betroffenen Tests uebersprungen -- dann liefe die wichtigste Pruefung ins Leere.
+      - name: Werkzeuge installieren
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends restic rclone rsync postgresql-client git
+          pipx install 'moto[server]' || pip install --user 'moto[server]'
 
       # Die Integrationstests laufen gegen ein echtes PostgreSQL in einem Container.
       # Gegen eine eingebettete Datenbank zu testen hiesse, das Falsche zu testen: Das

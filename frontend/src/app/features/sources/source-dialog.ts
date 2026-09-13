@@ -43,6 +43,15 @@ export class SourceDialog {
     this.allCredentials().filter((credential) => credential.type === 'API_TOKEN'),
   );
 
+  protected readonly s3Keys = computed(() =>
+    this.allCredentials().filter((credential) => credential.type === 'S3_KEYPAIR'),
+  );
+
+  /** Nur Schlüssel: Für ein Konto, das jede Nacht unbeaufsichtigt Daten holt, ist das die richtige Wahl. */
+  protected readonly sshKeys = computed(() =>
+    this.allCredentials().filter((credential) => credential.type === 'SSH_PRIVATE_KEY'),
+  );
+
   /** Die Hauptversionen, für die es ein Image mit passendem pg_dump gibt. */
   protected readonly postgresVersions = [18, 17, 16, 15, 14, 13];
 
@@ -50,6 +59,8 @@ export class SourceDialog {
     { value: 'LOCAL_PATH', label: 'Verzeichnis oder Netzlaufwerk' },
     { value: 'POSTGRES', label: 'PostgreSQL-Datenbank' },
     { value: 'GITHUB', label: 'GitHub-Repositories' },
+    { value: 'S3', label: 'S3-Bucket' },
+    { value: 'SFTP', label: 'SFTP-Server' },
   ];
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
@@ -77,6 +88,21 @@ export class SourceDialog {
     includeForks: [false],
     includeMetadata: [true],
     tokenCredentialId: [''],
+
+    // S3
+    endpoint: [''],
+    bucket: [''],
+    prefix: [''],
+    region: ['us-east-1'],
+    s3CredentialId: [''],
+
+    // SFTP
+    sftpHost: [''],
+    sftpPort: [22],
+    sftpUsername: [''],
+    remotePath: [''],
+    hostKey: [''],
+    sshKeyCredentialId: [''],
   });
 
   /** Ob die Angaben zum gewählten Typ vollständig sind. */
@@ -88,8 +114,18 @@ export class SourceDialog {
         return splitLines(value.paths).length > 0;
       case 'POSTGRES':
         return Boolean(value.host && value.username && value.passwordCredentialId);
-      default:
+      case 'GITHUB':
         return Boolean(value.owner && value.tokenCredentialId);
+      case 'S3':
+        return Boolean(value.endpoint && value.bucket && value.s3CredentialId);
+      default:
+        return Boolean(
+          value.sftpHost &&
+          value.sftpUsername &&
+          value.remotePath &&
+          value.hostKey &&
+          value.sshKeyCredentialId,
+        );
     }
   }
 
@@ -126,7 +162,7 @@ export class SourceDialog {
           credentialId: value.passwordCredentialId,
           includeGlobals: value.includeGlobals,
         };
-      default:
+      case 'GITHUB':
         return {
           type: 'GITHUB',
           owner: value.owner,
@@ -134,6 +170,25 @@ export class SourceDialog {
           includeForks: value.includeForks,
           includeMetadata: value.includeMetadata,
           credentialId: value.tokenCredentialId,
+        };
+      case 'S3':
+        return {
+          type: 'S3',
+          endpoint: value.endpoint,
+          bucket: value.bucket,
+          prefix: value.prefix || null,
+          region: value.region || null,
+          credentialId: value.s3CredentialId,
+        };
+      default:
+        return {
+          type: 'SFTP',
+          host: value.sftpHost,
+          port: value.sftpPort,
+          username: value.sftpUsername,
+          path: value.remotePath,
+          hostKey: value.hostKey,
+          credentialId: value.sshKeyCredentialId,
         };
     }
   }

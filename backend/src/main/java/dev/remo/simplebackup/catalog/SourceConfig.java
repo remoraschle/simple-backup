@@ -18,7 +18,9 @@ import java.util.UUID;
 @JsonSubTypes({
         @JsonSubTypes.Type(value = SourceConfig.LocalPath.class, name = "LOCAL_PATH"),
         @JsonSubTypes.Type(value = SourceConfig.Postgres.class, name = "POSTGRES"),
-        @JsonSubTypes.Type(value = SourceConfig.GitHub.class, name = "GITHUB")})
+        @JsonSubTypes.Type(value = SourceConfig.GitHub.class, name = "GITHUB"),
+        @JsonSubTypes.Type(value = SourceConfig.S3.class, name = "S3"),
+        @JsonSubTypes.Type(value = SourceConfig.Sftp.class, name = "SFTP")})
 public sealed interface SourceConfig {
 
     SourceType type();
@@ -134,6 +136,83 @@ public sealed interface SourceConfig {
         @Override
         public SourceType type() {
             return SourceType.GITHUB;
+        }
+    }
+
+    /**
+     * Ein S3-Bucket als Quelle.
+     *
+     * <p>Nicht zu verwechseln mit einem S3-<em>Ziel</em>: Hier liegen fremde Daten, die
+     * gesichert werden sollen -- etwa die Ablage einer anderen Anwendung.
+     *
+     * @param prefix       nur dieser Pfad im Bucket, leer fuer alles
+     * @param credentialId Verweis auf das Schluesselpaar in der verschluesselten Ablage
+     */
+    record S3(
+            @NotBlank String endpoint,
+            @NotBlank String bucket,
+            String prefix,
+            String region,
+            UUID credentialId) implements SourceConfig {
+
+        public S3 {
+            if (endpoint == null || (!endpoint.startsWith("http://") && !endpoint.startsWith("https://"))) {
+                throw new IllegalArgumentException(
+                        "Die Adresse muss mit http:// oder https:// beginnen: " + endpoint);
+            }
+            if (bucket == null || bucket.isBlank() || bucket.contains("/")) {
+                throw new IllegalArgumentException(
+                        "Der Bucket-Name darf nicht leer sein und keinen Schraegstrich enthalten: " + bucket);
+            }
+            if (credentialId == null) {
+                throw new IllegalArgumentException("Ohne Zugangsdaten kommt man an kein Bucket");
+            }
+            region = region == null || region.isBlank() ? "us-east-1" : region;
+        }
+
+        @Override
+        public SourceType type() {
+            return SourceType.S3;
+        }
+    }
+
+    /**
+     * Ein Verzeichnis auf einem SFTP-Server.
+     *
+     * @param hostKey      Der erwartete Hostschluessel, als Zeile im Format von
+     *                     {@code known_hosts}. <b>Pflicht.</b> Ein Backup, das jeden
+     *                     Serverschluessel akzeptiert, laedt seine Daten im Zweifel bei
+     *                     jemand anderem hoch -- und merkt es nicht.
+     * @param credentialId Verweis auf Passwort oder privaten Schluessel in der
+     *                     verschluesselten Ablage; welcher es ist, sagt die Art des Zugangs
+     */
+    record Sftp(
+            @NotBlank String host,
+            int port,
+            @NotBlank String username,
+            @NotBlank String path,
+            @NotBlank String hostKey,
+            UUID credentialId) implements SourceConfig {
+
+        public Sftp {
+            port = port <= 0 ? 22 : port;
+
+            if (path == null || !path.startsWith("/")) {
+                throw new IllegalArgumentException("Der Pfad muss absolut sein: " + path);
+            }
+            if (hostKey == null || hostKey.isBlank()) {
+                throw new IllegalArgumentException("""
+                        Ohne bekannten Hostschluessel wird nicht verbunden. Ein Backup, das jeden \
+                        Schluessel akzeptiert, laedt seine Daten im Zweifel bei jemand anderem hoch.""");
+            }
+            if (credentialId == null) {
+                throw new IllegalArgumentException("Ohne Zugangsdaten geht keine Verbindung");
+            }
+        }
+
+        @Override
+        public SourceType type() {
+            return SourceType.SFTP;
         }
     }
 }

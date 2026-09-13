@@ -55,10 +55,8 @@ class BackupRunnerTest {
                 testProperties());
     }
 
-    /** Kurze Zeitlimits: Ein Test soll nicht stundenlang auf ein Aufraeumen warten. */
     private static RunProperties testProperties() {
-        return new RunProperties(null, null, 2, null, null, Duration.ofMinutes(2), null, null,
-                null, null, null, null);
+        return TestRunProperties.defaults().pruneTimeout(Duration.ofMinutes(2)).build();
     }
 
     private static ExecutableTarget localTarget(String name, String path) {
@@ -264,19 +262,29 @@ class BackupRunnerTest {
         }
 
         @Test
-        @DisplayName("Der Spiegel-Modus wird als noch nicht umgesetzt gemeldet")
-        void reportsMirrorModeAsUnimplemented() {
-            // Ehrlicher als ein stiller Erfolg, der nichts gesichert hat.
+        @DisplayName("Der Spiegel-Modus laeuft ueber rsync, nicht ueber restic")
+        void mirrorModeUsesRsync() {
+            // Eine direkt lesbare Kopie ist der Zweck des Modus -- mit restic waere sie
+            // verschluesselt und ohne dieses Werkzeug nicht zu oeffnen.
             var spiegel = new ExecutableTarget(UUID.randomUUID(), "USB", TargetMode.MIRROR,
-                    new TargetConfig.LocalPath("/mnt/nas/spiegel", null), true);
+                    new TargetConfig.LocalPath("/mnt/nas", null), true);
 
             var outcomes = runner.run(planWith(spiegel), listener);
 
-            assertThat(outcomes).singleElement().satisfies(outcome -> {
-                assertThat(outcome.skipped()).isTrue();
-                assertThat(outcome.successful()).isFalse();
-                assertThat(outcome.message()).contains("noch nicht umgesetzt");
-            });
+            assertThat(outcomes).singleElement().satisfies(outcome ->
+                    assertThat(outcome.successful()).isTrue());
+
+            String rsync = executor.commands().stream()
+                    .filter(command -> command.contains("rsync"))
+                    .findFirst()
+                    .map(command -> String.join(" ", command))
+                    .orElseThrow(() -> new AssertionError("Es wurde nicht gespiegelt"));
+
+            // --delete ist der Kern eines Spiegels: Was an der Quelle weg ist, verschwindet
+            // auch in der Kopie.
+            assertThat(rsync).contains("--archive").contains("--delete")
+                    .contains("--exclude *.tmp");
+            assertThat(executor.commands()).noneMatch(command -> command.contains("backup"));
         }
     }
 

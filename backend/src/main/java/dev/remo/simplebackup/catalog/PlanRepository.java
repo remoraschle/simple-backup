@@ -29,6 +29,11 @@ interface PlanRepository extends JpaRepository<BackupPlan, UUID> {
     @Query("select count(p) > 0 from BackupPlan p join p.targets t where t.id = :targetId")
     boolean existsByTargetId(@Param("targetId") UUID targetId);
 
+    /** Ob ein <em>anderer</em> Plan dieses Ziel benutzt. */
+    @Query("select count(p) > 0 from BackupPlan p join p.targets t "
+            + "where t.id = :targetId and (:planId is null or p.id <> :planId)")
+    boolean existsOtherPlanUsingTarget(@Param("targetId") UUID targetId, @Param("planId") UUID planId);
+
     @Query("select count(p) > 0 from BackupPlan p where p.retentionPolicy.id = :policyId")
     boolean existsByRetentionPolicyId(@Param("policyId") UUID policyId);
 

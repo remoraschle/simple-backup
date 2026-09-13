@@ -12,6 +12,7 @@ public enum SourceType {
 
     /** Ob dieser Quelltyp bereits umgesetzt ist. */
     public boolean isImplemented() {
-        return this == LOCAL_PATH || this == POSTGRES || this == GITHUB;
+        return this == LOCAL_PATH || this == POSTGRES || this == GITHUB
+                || this == S3 || this == SFTP;
     }
 }

@@ -245,6 +245,7 @@ public class CatalogService {
 
         BackupSource source = requireSource(request.sourceId());
         List<BackupTarget> planTargets = resolveTargets(request.targetIds());
+        requireExclusiveMirrors(planTargets, null);
 
         var plan = new BackupPlan(request.name(), source, planTargets, request.cronExpression(),
                 request.timezone());
@@ -262,6 +263,7 @@ public class CatalogService {
         nextRunCalculator.validate(request.cronExpression(), request.timezone());
 
         List<BackupTarget> planTargets = resolveTargets(request.targetIds());
+        requireExclusiveMirrors(planTargets, plan.getId());
         applyRequest(plan, request, planTargets);
 
         if (plan.isEnabled()) {
@@ -277,6 +279,25 @@ public class CatalogService {
 
     public void deletePlan(UUID id) {
         plans.delete(requirePlan(id));
+    }
+
+    /**
+     * Ein Spiegel-Ziel gehoert genau einem Plan.
+     *
+     * <p>Ein Spiegel gleicht ab und loescht dabei, was an der Quelle fehlt. Zwei Plaene auf
+     * demselben Verzeichnis loeschten sich gegenseitig die Daten weg -- abwechselnd, jede
+     * Nacht, ohne dass ein einziger Lauf fehlschluege.
+     */
+    private void requireExclusiveMirrors(List<BackupTarget> planTargets, UUID planId) {
+        for (BackupTarget target : planTargets) {
+            if (target.getMode() == TargetMode.MIRROR
+                    && plans.existsOtherPlanUsingTarget(target.getId(), planId)) {
+
+                throw new ConflictException(("Das Spiegel-Ziel '%s' gehoert bereits zu einem anderen "
+                        + "Plan. Ein Spiegel loescht, was an der Quelle fehlt -- zwei Plaene darauf "
+                        + "loeschten sich gegenseitig die Daten weg.").formatted(target.getName()));
+            }
+        }
     }
 
     private void applyRequest(BackupPlan plan, CatalogRequests.SavePlan request,

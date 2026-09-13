@@ -3,6 +3,7 @@ package dev.remo.simplebackup.run;
 import dev.remo.simplebackup.catalog.ExecutablePlan;
 import dev.remo.simplebackup.catalog.ExecutableTarget;
 import dev.remo.simplebackup.catalog.SourceConfig;
+import dev.remo.simplebackup.catalog.TargetConfig;
 import dev.remo.simplebackup.catalog.TargetMode;
 import dev.remo.simplebackup.engine.BackupExecutor;
 import dev.remo.simplebackup.engine.ExecutionException;
@@ -165,8 +166,8 @@ public class BackupRunner {
     private TargetOutcome runTarget(ExecutablePlan plan, ExecutableTarget target,
             PreparedSource prepared, RunProgressListener listener) {
 
-        if (target.mode() != TargetMode.RESTIC) {
-            return TargetOutcome.skipped(target, "Der Spiegel-Modus ist noch nicht umgesetzt");
+        if (target.mode() == TargetMode.MIRROR) {
+            return runMirror(plan, target, prepared, listener);
         }
 
         ResticRepository repository = targets.repositoryFor(target.config(), target.name());
@@ -211,6 +212,84 @@ public class BackupRunner {
         applyRetention(plan, target, repository, mounts, listener);
 
         return TargetOutcome.succeeded(target, transfer.summary());
+    }
+
+    /**
+     * Spiegelt die Quelle als direkt lesbare Kopie.
+     *
+     * <p>Kein restic, keine Verschluesselung, keine Snapshots -- genau das ist der Zweck:
+     * Eine Kopie, die man ohne dieses Werkzeug und ohne Passwort oeffnen kann. Der Preis ist
+     * ebenso klar: Es gibt nur den letzten Stand, und eine geloeschte Datei ist nach dem
+     * naechsten Lauf auch in der Kopie geloescht.
+     */
+    private TargetOutcome runMirror(ExecutablePlan plan, ExecutableTarget target,
+            PreparedSource prepared, RunProgressListener listener) {
+
+        if (!(target.config() instanceof TargetConfig.LocalPath localTarget)) {
+            return TargetOutcome.failed(target,
+                    "Der Spiegel-Modus schreibt in ein Verzeichnis, nicht nach " + target.config().type());
+        }
+
+        VolumeMount destination = targets.translate(localTarget.path(), false);
+
+        List<VolumeMount> mounts = new ArrayList<>(prepared.mounts());
+        mounts.add(destination);
+
+        List<String> command = rsyncCommand(prepared, destination.target());
+
+        var builder = ExecutionRequest.builder(executor.defaultEnvironment(), command.toArray(String[]::new))
+                .executionId(UUID.randomUUID().toString())
+                .timeout(plan.timeout())
+                .label("simple-backup.plan-id", plan.planId().toString());
+
+        mounts.forEach(builder::mount);
+        ExecutionRequest request = builder.build();
+
+        UUID stepId = listener.stepStarted(StepKind.TRANSFER, target.targetId(),
+                "Spiegeln auf " + target.name(), executor.defaultEnvironment(),
+                redactor.redact(request.command()));
+
+        try {
+            ExecutionResult result = executor.start(request, listener::logLine)
+                    .awaitCompletion(plan.timeout());
+
+            listener.stepFinished(stepId, toStepStatus(result.status()), result.exitCode(),
+                    result.isSuccess() ? "Spiegeln auf " + target.name() : result.lastError());
+
+            return result.isSuccess()
+                    ? TargetOutcome.succeeded(target, null)
+                    : TargetOutcome.failed(target, result.lastError());
+
+        } catch (ExecutionException e) {
+            String message = redactor.redact(String.valueOf(e.getMessage()));
+            listener.stepFinished(stepId, StepStatus.FAILED, null, message);
+            return TargetOutcome.failed(target, message);
+        }
+    }
+
+    /**
+     * Der rsync-Aufruf.
+     *
+     * <p>{@code --delete} ist Absicht und der Kern eines Spiegels: Was an der Quelle weg ist,
+     * verschwindet auch in der Kopie. Wer das nicht will, will keinen Spiegel, sondern
+     * Snapshots -- und dafuer gibt es den restic-Modus.
+     */
+    private static List<String> rsyncCommand(PreparedSource prepared, String destination) {
+        var command = new ArrayList<>(List.of("rsync",
+                "--archive",
+                "--delete",
+                "--numeric-ids",
+                "--human-readable",
+                "--info=stats2"));
+
+        for (String pattern : prepared.excludes()) {
+            command.add("--exclude");
+            command.add(pattern);
+        }
+        command.addAll(prepared.paths());
+        command.add(destination.endsWith("/") ? destination : destination + "/");
+
+        return List.copyOf(command);
     }
 
     /**

@@ -123,7 +123,7 @@ class GithubProducer implements SourceProducer {
                         + "/" + CREDENTIALS_FILE,
                 "clone", "--mirror", repository.cloneUrl(), directory);
 
-        var request = ExecutionRequest.builder(properties.gitImage(), command.toArray(String[]::new))
+        var request = ExecutionRequest.builder(executor.defaultEnvironment(), command.toArray(String[]::new))
                 .executionId(UUID.randomUUID().toString())
                 .timeout(properties.acquireTimeout())
                 .mount(staging)
@@ -132,7 +132,7 @@ class GithubProducer implements SourceProducer {
                 .build();
 
         UUID stepId = listener.stepStarted(StepKind.ACQUIRE, null, "Spiegeln von " + repository.fullName(),
-                properties.gitImage(), redactor.redact(request.command()));
+                executor.defaultEnvironment(), redactor.redact(request.command()));
 
         try {
             ExecutionResult result = executor.start(request, listener::logLine)

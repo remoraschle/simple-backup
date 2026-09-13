@@ -20,7 +20,7 @@
       <mat-label>Modus</mat-label>
       <mat-select formControlName="mode">
         <mat-option value="RESTIC">restic — versioniert, verschlüsselt, dedupliziert</mat-option>
-        <mat-option value="MIRROR" disabled>Spiegel — 1:1-Kopie (noch nicht umgesetzt)</mat-option>
+        <mat-option value="MIRROR">Spiegel — direkt lesbare 1:1-Kopie</mat-option>
       </mat-select>
       <mat-hint>
         Nur im restic-Modus gibt es Snapshots, Aufbewahrungsregeln und einen Browser zum
@@ -66,6 +66,19 @@
           <mat-hint>Zuerst unter Einstellungen ein S3-Schlüsselpaar hinterlegen</mat-hint>
         }
       </mat-form-field>
+    }
+
+    @if (mode() === 'MIRROR') {
+      <p class="mt-4 mb-0 flex gap-2 rounded-md bg-surface-container-high p-3 text-sm">
+        <mat-icon class="h-5 w-5 shrink-0 text-xl leading-5 text-on-surface-variant">
+          info_outline
+        </mat-icon>
+        <span>
+          Ein Spiegel gleicht ab und löscht dabei, was an der Quelle fehlt. Es gibt nur den letzten
+          Stand — wer ältere Stände braucht, nimmt den restic-Modus. Jedes Spiegel-Ziel gehört genau
+          einem Plan, sonst löschten sich zwei Pläne gegenseitig die Daten weg.
+        </span>
+      </p>
     }
 
     @if (mode() === 'RESTIC') {
