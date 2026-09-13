@@ -18,6 +18,7 @@ import dev.remo.simplebackup.restic.ResticOutputParser;
 import dev.remo.simplebackup.secret.CredentialService;
 import dev.remo.simplebackup.shared.RetentionRule;
 import dev.remo.simplebackup.shared.SecretRedactor;
+import dev.remo.simplebackup.snapshot.ResticTargets;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -92,9 +93,10 @@ class EndToEndBackupTest {
 
         executor = new LocalProcessExecutor(new SecretRedactor());
         listener = new RecordingProgressListener();
-        runner = new BackupRunner(executor, mounts, credentials,
-                new ResticOutputParser(new ObjectMapper()), new SecretRedactor(), new ObjectMapper(),
-                testProperties());
+        var targets = new ResticTargets(credentials, mounts, new ObjectMapper());
+
+        runner = new BackupRunner(executor, targets, new ResticOutputParser(new ObjectMapper()),
+                new SecretRedactor(), testProperties());
     }
 
     /** Kurze Zeitlimits: Ein Test soll nicht stundenlang auf ein Aufraeumen warten. */

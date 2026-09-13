@@ -95,6 +95,9 @@ simplebackup:
   run:
     log-directory: ${SIMPLEBACKUP_LOG_DIR:/var/lib/simple-backup/logs}
     staging-directory: ${SIMPLEBACKUP_STAGING_DIR:/var/lib/simple-backup/staging}
+    # Wann von selbst geprueft wird. Eine Pruefung, die man von Hand anstossen muss, wird
+    # genau einmal angestossen -- am Tag der Einrichtung.
+    check-cron: "0 0 4 * * SUN"
     log-retention: 90d
     # Ohne diese Grenze koennten nach einem Stillstand alle faelligen Plaene gleichzeitig
     # starten -- gerade dann, wenn der Server ohnehin erst wieder hochgekommen ist.
@@ -107,6 +110,17 @@ simplebackup:
     # viel Verspaetung vorher geduldet wird.
     watchdog-interval: 15m
     watchdog-grace: 30m
+
+  snapshot:
+    # Grosszuegig: Im Ernstfall geht es um viele Daten, und ein Abbruch mitten im
+    # Zurueckholen ist das Letzte, was jemand braucht.
+    restore-timeout: 12h
+    dump-timeout: 10m
+    check-timeout: 6h
+    # Anteil der Daten, den die Pruefung wirklich liest. Alles zu lesen dauert bei grossen
+    # Repositories Stunden; gar nichts zu lesen uebersieht verrottete Daten.
+    verify-percent: 5
+    staging-directory: ${SIMPLEBACKUP_STAGING_DIR:/var/lib/simple-backup/staging}
 
   notification:
     # Wie oft der Postausgang geleert wird. Ein Alarm darf nicht erst nach Minuten

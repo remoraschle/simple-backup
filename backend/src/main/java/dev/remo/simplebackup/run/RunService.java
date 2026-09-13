@@ -4,6 +4,7 @@ import dev.remo.simplebackup.catalog.CatalogService;
 import dev.remo.simplebackup.catalog.ExecutablePlan;
 import dev.remo.simplebackup.restic.ResticMessage;
 import dev.remo.simplebackup.shared.NotFoundException;
+import dev.remo.simplebackup.snapshot.SnapshotService;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +43,7 @@ public class RunService {
     private final CatalogService catalog;
     private final BackupRunner runner;
     private final RunNotifier notifier;
+    private final SnapshotService snapshots;
     private final RunProperties properties;
 
     /**
@@ -58,13 +60,14 @@ public class RunService {
 
     RunService(RunRepository runs, RunPersistence persistence, RunEventPublisher events,
             CatalogService catalog, BackupRunner runner, RunNotifier notifier,
-            RunProperties properties) {
+            SnapshotService snapshots, RunProperties properties) {
         this.runs = runs;
         this.persistence = persistence;
         this.events = events;
         this.catalog = catalog;
         this.runner = runner;
         this.notifier = notifier;
+        this.snapshots = snapshots;
         this.properties = properties;
         this.parallelRuns = new Semaphore(properties.maxParallelRuns());
     }
@@ -122,6 +125,7 @@ public class RunService {
 
                 RunPersistence.Outcome outcome = persistence.complete(runId, outcomes);
 
+                recordSnapshots(runId, planId, outcomes, outcome.finishedAt());
                 catalog.recordRunResult(planId, outcome.finishedAt(), outcome.status().name());
                 events.publish(runId, new RunEvent.Finished(outcome.status(), outcome.errorSummary()));
                 events.closeStream(runId);
@@ -141,6 +145,29 @@ public class RunService {
                 parallelRuns.release();
             }
             activeRuns.remove(runId);
+        }
+    }
+
+    /**
+     * Traegt ein, was der Lauf im Repository hinterlassen hat.
+     *
+     * <p>Fehler hier duerfen den Lauf nicht kippen: Die Sicherung ist geschrieben, und ein
+     * fehlender Eintrag im Verzeichnis aendert daran nichts -- er laesst sich aus dem
+     * Repository jederzeit wieder herstellen.
+     */
+    private void recordSnapshots(UUID runId, UUID planId, List<BackupRunner.TargetOutcome> outcomes,
+            java.time.Instant finishedAt) {
+
+        for (BackupRunner.TargetOutcome outcome : outcomes) {
+            if (!outcome.successful() || outcome.summary() == null) {
+                continue;
+            }
+            try {
+                snapshots.record(runId, planId, outcome.targetId(), outcome.summary().snapshotId(),
+                        outcome.summary().totalBytesProcessed(), finishedAt);
+            } catch (RuntimeException e) {
+                log.warn("Snapshot des Ziels {} liess sich nicht vermerken", outcome.targetName(), e);
+            }
         }
     }
 

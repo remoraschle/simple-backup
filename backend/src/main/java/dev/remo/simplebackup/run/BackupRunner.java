@@ -3,21 +3,18 @@ package dev.remo.simplebackup.run;
 import dev.remo.simplebackup.catalog.ExecutablePlan;
 import dev.remo.simplebackup.catalog.ExecutableTarget;
 import dev.remo.simplebackup.catalog.SourceConfig;
-import dev.remo.simplebackup.catalog.TargetConfig;
 import dev.remo.simplebackup.catalog.TargetMode;
 import dev.remo.simplebackup.engine.BackupExecutor;
 import dev.remo.simplebackup.engine.ExecutionException;
 import dev.remo.simplebackup.engine.ExecutionRequest;
 import dev.remo.simplebackup.engine.ExecutionResult;
 import dev.remo.simplebackup.engine.ExecutionStatus;
-import dev.remo.simplebackup.engine.MountTranslator;
-import dev.remo.simplebackup.engine.PathTranslationException;
 import dev.remo.simplebackup.engine.VolumeMount;
 import dev.remo.simplebackup.restic.ResticCommands;
 import dev.remo.simplebackup.restic.ResticMessage;
 import dev.remo.simplebackup.restic.ResticOutputParser;
 import dev.remo.simplebackup.restic.ResticRepository;
-import dev.remo.simplebackup.secret.CredentialService;
+import dev.remo.simplebackup.snapshot.ResticTargets;
 import dev.remo.simplebackup.shared.SecretRedactor;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -27,7 +24,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Fuehrt einen Plan aus: Schritte bauen, ausfuehren, auswerten.
@@ -44,11 +40,9 @@ public class BackupRunner {
     private static final Logger log = LoggerFactory.getLogger(BackupRunner.class);
 
     private final BackupExecutor executor;
-    private final MountTranslator mountTranslator;
-    private final CredentialService credentials;
+    private final ResticTargets targets;
     private final ResticOutputParser outputParser;
     private final SecretRedactor redactor;
-    private final ObjectMapper objectMapper;
 
     /**
      * Eigenes Zeitlimit fuers Aufraeumen: {@code prune} liest das halbe Repository und
@@ -56,15 +50,12 @@ public class BackupRunner {
      */
     private final Duration pruneTimeout;
 
-    BackupRunner(BackupExecutor executor, MountTranslator mountTranslator, CredentialService credentials,
-            ResticOutputParser outputParser, SecretRedactor redactor, ObjectMapper objectMapper,
-            RunProperties properties) {
+    BackupRunner(BackupExecutor executor, ResticTargets targets, ResticOutputParser outputParser,
+            SecretRedactor redactor, RunProperties properties) {
         this.executor = executor;
-        this.mountTranslator = mountTranslator;
-        this.credentials = credentials;
+        this.targets = targets;
         this.outputParser = outputParser;
         this.redactor = redactor;
-        this.objectMapper = objectMapper;
         this.pruneTimeout = properties.pruneTimeout();
     }
 
@@ -99,7 +90,7 @@ public class BackupRunner {
             return TargetOutcome.skipped(target, "Der Spiegel-Modus ist noch nicht umgesetzt");
         }
 
-        ResticRepository repository = buildRepository(target);
+        ResticRepository repository = targets.repositoryFor(target.config(), target.name());
         List<VolumeMount> mounts = mountsFor(plan, target);
 
         // Schritt 1: Gibt es das Repository schon? Der Rueckgabewert sagt es, ohne dass eine
@@ -241,35 +232,6 @@ public class BackupRunner {
     }
 
     /**
-     * Baut die Repository-Adresse und loest die Zugangsdaten auf.
-     *
-     * <p>Klartext entsteht erst hier, unmittelbar vor dem Start des Runners, und wird
-     * gleichzeitig beim Redaktor angemeldet.
-     */
-    private ResticRepository buildRepository(ExecutableTarget target) {
-        TargetConfig config = target.config();
-        UUID passwordId = config.repositoryPasswordCredentialId();
-
-        if (passwordId == null) {
-            throw new IllegalStateException(
-                    "Dem Ziel '%s' fehlt das Repository-Passwort".formatted(target.name()));
-        }
-        String password = credentials.reveal(passwordId);
-
-        return switch (config) {
-            case TargetConfig.LocalPath localPath -> ResticRepository.localPath(
-                    pathInRunner(localPath.path()), password);
-
-            case TargetConfig.S3 s3 -> {
-                var keys = objectMapper.readValue(credentials.reveal(s3.credentialId()),
-                        S3Credentials.class);
-                yield ResticRepository.s3(s3.endpoint(), s3.bucket(), s3.prefix(),
-                        keys.accessKeyId(), keys.secretAccessKey(), password);
-            }
-        };
-    }
-
-    /**
      * Die Einhaengungen, die der Runner braucht.
      *
      * <p>Quellen immer schreibgeschuetzt: Das Werkzeug hat auf Originaldaten nichts zu
@@ -280,30 +242,15 @@ public class BackupRunner {
         List<VolumeMount> mounts = new ArrayList<>();
 
         if (plan.source() instanceof SourceConfig.LocalPath localPath) {
-            localPath.paths().forEach(path -> mounts.add(translate(path, true)));
+            localPath.paths().forEach(path -> mounts.add(targets.translate(path, true)));
         }
-        if (target.config() instanceof TargetConfig.LocalPath localTarget) {
-            mounts.add(translate(localTarget.path(), false));
-        }
+        mounts.addAll(targets.mountsFor(target.config()));
         return mounts;
-    }
-
-    private VolumeMount translate(String containerPath, boolean readOnly) {
-        try {
-            return mountTranslator.translate(containerPath, readOnly);
-        } catch (PathTranslationException e) {
-            throw new IllegalStateException(e.getMessage(), e);
-        }
-    }
-
-    /** Im Runner erscheinen die Pfade unter derselben Adresse wie im Backend. */
-    private String pathInRunner(String containerPath) {
-        return translate(containerPath, false).target();
     }
 
     private List<String> sourcePathsInRunner(ExecutablePlan plan) {
         if (plan.source() instanceof SourceConfig.LocalPath localPath) {
-            return localPath.paths().stream().map(path -> translate(path, true).target()).toList();
+            return localPath.paths().stream().map(path -> targets.translate(path, true).target()).toList();
         }
         throw new IllegalStateException(
                 "Quellen vom Typ %s sind noch nicht umgesetzt".formatted(plan.source().type()));

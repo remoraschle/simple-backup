@@ -14,6 +14,7 @@ import dev.remo.simplebackup.restic.ResticOutputParser;
 import dev.remo.simplebackup.secret.CredentialService;
 import dev.remo.simplebackup.shared.RetentionRule;
 import dev.remo.simplebackup.shared.SecretRedactor;
+import dev.remo.simplebackup.snapshot.ResticTargets;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -47,9 +48,10 @@ class BackupRunnerTest {
                 new VolumeMount("/srv/fotos", "/sources/fotos", true, false),
                 new VolumeMount("/mnt/nas", "/mnt/nas", false, false)));
 
-        runner = new BackupRunner(executor, mounts, credentials,
-                new ResticOutputParser(new ObjectMapper()), new SecretRedactor(), new ObjectMapper(),
-                testProperties());
+        var targets = new ResticTargets(credentials, mounts, new ObjectMapper());
+
+        runner = new BackupRunner(executor, targets, new ResticOutputParser(new ObjectMapper()),
+                new SecretRedactor(), testProperties());
     }
 
     /** Kurze Zeitlimits: Ein Test soll nicht stundenlang auf ein Aufraeumen warten. */
