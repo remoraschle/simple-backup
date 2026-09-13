@@ -1,0 +1,140 @@
+<div class="grid gap-6 lg:grid-cols-2">
+  <mat-card class="self-start">
+    <mat-card-content class="pt-6">
+      <h2 class="mt-0 mb-2 text-lg font-medium">Konfiguration sichern</h2>
+      <p class="mt-0 mb-4 max-w-prose text-sm text-on-surface-variant">
+        Legt eine Datei mit Quellen, Zielen, Plänen, Regeln, Kanälen und
+        <strong>allen Zugangsdaten</strong> an, verschlüsselt mit dem Passwort unten. Ohne sie endet
+        ein verlorener Masterkey endgültig: Die Datenbank wäre dann nicht mehr lesbar und damit auch
+        kein einziges Repository.
+      </p>
+
+      <div
+        class="mb-4 rounded-lg border border-outline-variant bg-surface-container p-3 text-sm text-on-surface-variant"
+      >
+        <mat-icon class="!h-4 !w-4 !text-base align-text-bottom">key</mat-icon>
+        Das Archiv ist so viel wert wie der Zugriff auf sämtliche Ziele. Es gehört nicht neben die
+        Anwendung, sondern woandershin — und das Passwort nicht mit ihm zusammen.
+      </div>
+
+      <form [formGroup]="exportForm" (ngSubmit)="exportArchive()" class="flex flex-col gap-2">
+        <mat-form-field>
+          <mat-label>Passwort für das Archiv</mat-label>
+          <input matInput type="password" formControlName="password" autocomplete="new-password" />
+          <mat-hint>
+            Mindestens {{ minimumLength }} Zeichen. Nicht das Anmeldepasswort — dieses hier wird
+            gebraucht, wenn von der Anwendung nichts mehr steht.
+          </mat-hint>
+        </mat-form-field>
+
+        <mat-form-field class="mt-4">
+          <mat-label>Passwort wiederholen</mat-label>
+          <input matInput type="password" formControlName="repeated" autocomplete="new-password" />
+          <mat-hint>
+            Ein vertipptes Passwort fällt sonst erst im Ernstfall auf. Ein Archiv ohne sein Passwort
+            lässt sich nicht öffnen — auch nicht von dieser Anwendung.
+          </mat-hint>
+        </mat-form-field>
+
+        <!--
+          Bewusst ausserhalb des Feldes und nicht als mat-error: Material zeigt einen Fehler
+          nur an, wenn das Feld selbst ungueltig ist. Hier stimmt aber jedes Feld für sich --
+          falsch ist erst das Verhaeltnis der beiden.
+        -->
+        @if (!passwordsMatch() && exportForm.controls.repeated.value.length > 0) {
+          <p class="mt-1 mb-0 text-sm text-error">Die beiden Eingaben stimmen nicht überein.</p>
+        }
+
+        <div class="mt-6">
+          <button
+            matButton="filled"
+            type="submit"
+            [disabled]="exportForm.invalid || !passwordsMatch() || busy()"
+          >
+            <mat-icon>download</mat-icon>
+            Archiv herunterladen
+          </button>
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="self-start">
+    <mat-card-content class="pt-6">
+      <h2 class="mt-0 mb-2 text-lg font-medium">Konfiguration einspielen</h2>
+      <p class="mt-0 mb-4 max-w-prose text-sm text-on-surface-variant">
+        Legt an, was hier noch fehlt. Vorhandenes bleibt unberührt: Ein Eintrag, dessen Name schon
+        vergeben ist, gilt als derselbe und wird übersprungen. Ein zweiter Aufruf ändert deshalb
+        nichts mehr.
+      </p>
+
+      <div class="flex flex-col gap-2">
+        <div>
+          <button matButton="outlined" type="button" (click)="fileInput.click()">
+            <mat-icon>attach_file</mat-icon>
+            Archiv auswählen
+          </button>
+          <input
+            #fileInput
+            type="file"
+            accept=".sbexp"
+            hidden
+            (change)="chooseFile($event)"
+            aria-label="Archivdatei auswählen"
+          />
+          @if (selectedFile(); as file) {
+            <span class="ml-3 text-sm text-on-surface-variant">{{ file.name }}</span>
+          }
+        </div>
+
+        <form [formGroup]="importForm" (ngSubmit)="importArchive()" class="flex flex-col gap-2">
+          <mat-form-field class="mt-4">
+            <mat-label>Passwort des Archivs</mat-label>
+            <input
+              matInput
+              type="password"
+              formControlName="password"
+              autocomplete="current-password"
+            />
+          </mat-form-field>
+
+          <div class="mt-4">
+            <button
+              matButton="filled"
+              type="submit"
+              [disabled]="!selectedFile() || importForm.invalid || busy()"
+            >
+              <mat-icon>upload</mat-icon>
+              Einspielen
+            </button>
+          </div>
+        </form>
+      </div>
+
+      @if (report(); as result) {
+        <div class="mt-6 rounded-lg border border-outline-variant p-3 text-sm">
+          @if (nothingImported(result)) {
+            <p class="mt-0 mb-2 font-medium">Nichts angelegt — alles war bereits vorhanden.</p>
+          } @else {
+            <p class="mt-0 mb-2 font-medium">Angelegt:</p>
+            <ul class="mt-0 mb-2 list-disc pl-5">
+              @for (entry of entries(result.imported); track entry.kind) {
+                <li>{{ entry.count }} × {{ entry.kind }}</li>
+              }
+            </ul>
+          }
+
+          @for (entry of skippedEntries(result.skipped); track entry.kind) {
+            <p class="my-1 text-on-surface-variant">
+              Übersprungen ({{ entry.kind }}): {{ entry.names }}
+            </p>
+          }
+
+          @for (warning of result.warnings; track warning) {
+            <p class="my-1 text-error">{{ warning }}</p>
+          }
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+</div>

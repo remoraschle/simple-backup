@@ -118,6 +118,9 @@ simplebackup:
     postgres-image: ${SIMPLEBACKUP_POSTGRES_IMAGE:postgres:%d-alpine}
     # Abweichend nur fuer GitHub Enterprise oder Tests.
     github-api-url: ${SIMPLEBACKUP_GITHUB_API:https://api.github.com}
+    # Wie oft die Kennzahlen fuer Prometheus neu erhoben werden. Nicht bei jedem Abruf:
+    # Prometheus fragt oefter, als sich hier etwas aendert.
+    metrics-interval: 1m
 
   snapshot:
     # Grosszuegig: Im Ernstfall geht es um viele Daten, und ein Abbruch mitten im

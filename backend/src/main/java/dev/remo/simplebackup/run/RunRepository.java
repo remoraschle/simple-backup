@@ -33,4 +33,7 @@ interface RunRepository extends JpaRepository<BackupRun, UUID> {
      */
     Optional<BackupRun> findFirstByPlanIdAndStatusInOrderByFinishedAtDesc(
             UUID planId, List<RunStatus> statuses);
+
+    /** Der letzte abgeschlossene Lauf, gleich mit welchem Ausgang -- fuer die Kennzahlen. */
+    Optional<BackupRun> findFirstByPlanIdAndFinishedAtNotNullOrderByFinishedAtDesc(UUID planId);
 }

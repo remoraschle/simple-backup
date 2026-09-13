@@ -237,6 +237,26 @@ public class CatalogService {
     }
 
     public PlanView createPlan(CatalogRequests.SavePlan request) {
+        return createPlan(null, request);
+    }
+
+    /**
+     * Legt einen Plan unter seiner urspruenglichen Kennung an.
+     *
+     * <p>Nur fuers Einspielen eines Archivs. Bei Quellen, Zielen und Zugaengen ist die
+     * Kennung eine reine Innensache, bei einem Plan nicht: Aus ihr entstehen Host und Tag
+     * seiner Snapshots. Bekaeme er beim Einspielen eine neue, waeren ihm seine eigenen
+     * bisherigen Sicherungen fremd -- die Aufbewahrung liesse sie fuer immer liegen, und im
+     * Snapshot-Browser tauchten sie nicht mehr auf.
+     */
+    public PlanView restorePlan(UUID id, CatalogRequests.SavePlan request) {
+        if (plans.existsById(id)) {
+            throw new ConflictException("Ein Plan mit der Kennung %s existiert bereits".formatted(id));
+        }
+        return createPlan(id, request);
+    }
+
+    private PlanView createPlan(UUID id, CatalogRequests.SavePlan request) {
         if (plans.existsByName(request.name())) {
             throw new ConflictException("Ein Plan mit dem Namen '%s' existiert bereits"
                     .formatted(request.name()));
@@ -247,8 +267,11 @@ public class CatalogService {
         List<BackupTarget> planTargets = resolveTargets(request.targetIds());
         requireExclusiveMirrors(planTargets, null);
 
-        var plan = new BackupPlan(request.name(), source, planTargets, request.cronExpression(),
-                request.timezone());
+        var plan = id == null
+                ? new BackupPlan(request.name(), source, planTargets, request.cronExpression(),
+                        request.timezone())
+                : new BackupPlan(id, request.name(), source, planTargets, request.cronExpression(),
+                        request.timezone());
         applyRequest(plan, request, planTargets);
 
         if (plan.isEnabled()) {

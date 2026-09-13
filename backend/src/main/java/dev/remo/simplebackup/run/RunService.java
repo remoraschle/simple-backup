@@ -44,6 +44,7 @@ public class RunService {
     private final BackupRunner runner;
     private final RunNotifier notifier;
     private final SnapshotService snapshots;
+    private final BackupMetrics metrics;
     private final RunProperties properties;
 
     /**
@@ -60,7 +61,7 @@ public class RunService {
 
     RunService(RunRepository runs, RunPersistence persistence, RunEventPublisher events,
             CatalogService catalog, BackupRunner runner, RunNotifier notifier,
-            SnapshotService snapshots, RunProperties properties) {
+            SnapshotService snapshots, BackupMetrics metrics, RunProperties properties) {
         this.runs = runs;
         this.persistence = persistence;
         this.events = events;
@@ -68,6 +69,7 @@ public class RunService {
         this.runner = runner;
         this.notifier = notifier;
         this.snapshots = snapshots;
+        this.metrics = metrics;
         this.properties = properties;
         this.parallelRuns = new Semaphore(properties.maxParallelRuns());
     }
@@ -130,6 +132,7 @@ public class RunService {
                 events.publish(runId, new RunEvent.Finished(outcome.status(), outcome.errorSummary()));
                 events.closeStream(runId);
                 notifier.runFinished(planId, runId, outcome.status(), outcome.errorSummary(), outcomes);
+                metrics.runFinished(planId, outcome.status());
 
                 log.info("Lauf {} beendet: {}", runId, outcome.status());
             }
@@ -182,6 +185,7 @@ public class RunService {
         events.publish(runId, new RunEvent.Finished(status, message));
         events.closeStream(runId);
         notifier.runFinished(planId, runId, status, message, List.of());
+        metrics.runFinished(planId, status);
     }
 
     // ------------------------------------------------------------------ Abfrage

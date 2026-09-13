@@ -366,3 +366,16 @@ export interface FinishedEvent {
   readonly status: RunStatus;
   readonly errorSummary: string | null;
 }
+
+/**
+ * Ergebnis eines eingespielten Archivs.
+ *
+ * <p>Beides wird gezeigt: was angelegt wurde und was übersprungen wurde, weil der Name
+ * bereits vergeben war. Ohne die zweite Liste bliebe offen, ob ein Eintrag fehlt oder ob
+ * er einfach schon da war.
+ */
+export interface ImportReport {
+  readonly imported: Record<string, number>;
+  readonly skipped: Record<string, string[]>;
+  readonly warnings: string[];
+}

@@ -103,7 +103,19 @@ public class BackupPlan {
 
     BackupPlan(String name, BackupSource source, List<BackupTarget> targets, String cronExpression,
             String timezone) {
-        this.id = UUID.randomUUID();
+        this(UUID.randomUUID(), name, source, targets, cronExpression, timezone);
+    }
+
+    /**
+     * Mit vorgegebener Kennung -- nur fuers Einspielen eines Archivs.
+     *
+     * <p>Die Kennung ist bei einem Plan nicht beliebig: Aus ihr leiten sich Host und Tag
+     * seiner Snapshots ab. Ein eingespielter Plan mit neuer Kennung waere fuer sein eigenes
+     * Repository ein Fremder.
+     */
+    BackupPlan(UUID id, String name, BackupSource source, List<BackupTarget> targets,
+            String cronExpression, String timezone) {
+        this.id = id;
         this.name = name;
         this.source = source;
         this.targets = new ArrayList<>(targets);

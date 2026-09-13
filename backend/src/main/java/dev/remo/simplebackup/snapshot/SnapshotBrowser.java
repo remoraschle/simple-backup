@@ -1,6 +1,7 @@
 package dev.remo.simplebackup.snapshot;
 
 import dev.remo.simplebackup.catalog.CatalogService;
+import dev.remo.simplebackup.catalog.CatalogViews;
 import dev.remo.simplebackup.catalog.CatalogViews.TargetView;
 import dev.remo.simplebackup.restic.ResticCommands;
 import dev.remo.simplebackup.restic.ResticListing;
@@ -9,7 +10,9 @@ import dev.remo.simplebackup.shared.NotFoundException;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,6 +31,9 @@ public class SnapshotBrowser {
 
     /** Auflisten ist billig, aber ein grosses Repository braucht trotzdem Zeit. */
     private static final Duration LIST_TIMEOUT = Duration.ofMinutes(10);
+
+    /** Muss zu {@code BackupPlan#resticHost()} passen -- dort entsteht die Kennzeichnung. */
+    private static final String PLAN_PREFIX = "plan-";
 
     private final CatalogService catalog;
     private final SnapshotService snapshots;
@@ -68,11 +74,45 @@ public class SnapshotBrowser {
         List<ResticListing.Snapshot> present = parser.parseSnapshots(result.joined());
         log.info("Ziel {} meldet {} Snapshots", target.name(), present.size());
 
-        snapshots.reconcile(targetId, planId, present.stream()
-                .map(snapshot -> new SnapshotService.RepositorySnapshot(snapshot.id(), snapshot.time(), null))
+        Set<UUID> knownPlans = catalog.listPlans().stream()
+                .map(CatalogViews.PlanView::id).collect(Collectors.toSet());
+
+        int recorded = snapshots.reconcile(targetId, planId, present.stream()
+                .map(snapshot -> new SnapshotService.RepositorySnapshot(snapshot.id(),
+                        snapshot.time(), null, ownerOf(snapshot, knownPlans)))
                 .toList());
 
+        if (recorded < present.size()) {
+            log.info("{} von {} Snapshots im Ziel {} gehoeren zu keinem Plan dieser Anwendung",
+                    present.size() - recorded, present.size(), target.name());
+        }
         return snapshots.list(planId, planId == null ? targetId : null);
+    }
+
+    /**
+     * Zu welchem Plan ein Snapshot im Repository gehoert.
+     *
+     * <p>Die Zuordnung steht im Snapshot selbst: Ein Plan sichert unter dem Hostnamen
+     * {@code plan-<Kennung>}. Deshalb bleibt diese Kennung ueber einen Konfig-Import hinweg
+     * erhalten -- sonst waeren einem wiederhergestellten Plan genau die Sicherungen fremd,
+     * um derentwillen er wiederhergestellt wurde.
+     *
+     * <p>Ein Repository kann daneben Fremdes enthalten: Snapshots eines geloeschten Plans,
+     * eines anderen Servers oder von Hand angelegte. Fuer sie gibt es hier keinen Plan, und
+     * sie bleiben unberuecksichtigt statt den ganzen Abgleich scheitern zu lassen.
+     */
+    private static UUID ownerOf(ResticListing.Snapshot snapshot, Set<UUID> knownPlans) {
+        String hostname = snapshot.hostname();
+        if (hostname == null || !hostname.startsWith(PLAN_PREFIX)) {
+            return null;
+        }
+        try {
+            UUID planId = UUID.fromString(hostname.substring(PLAN_PREFIX.length()));
+            return knownPlans.contains(planId) ? planId : null;
+
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /**

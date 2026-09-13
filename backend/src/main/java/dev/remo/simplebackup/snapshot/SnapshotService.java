@@ -83,8 +83,10 @@ public class SnapshotService {
      * Der zweite Fall ist der interessante: So tauchen auch Snapshots auf, die ein anderes
      * Werkzeug oder ein Handgriff auf der Kommandozeile angelegt hat.
      *
+     * @param planId  Plan, zu dem alle gemeldeten Snapshots gehoeren, oder {@code null},
+     *                wenn jeder Eintrag seinen Plan selbst mitbringt
      * @param present Kennungen und Zeitpunkte, wie restic sie meldet
-     * @return wie viele Eintraege danach fuer dieses Ziel bekannt sind
+     * @return wie viele Eintraege fuer dieses Ziel aufgenommen wurden
      */
     public int reconcile(UUID targetId, UUID planId, List<RepositorySnapshot> present) {
         var known = snapshots.findAllByTargetIdOrderBySnapshotTimeDesc(targetId);
@@ -94,13 +96,28 @@ public class SnapshotService {
                 .filter(snapshot -> !presentIds.contains(snapshot.getExternalId()))
                 .forEach(snapshots::delete);
 
-        present.forEach(snapshot ->
-                record(null, planId, targetId, snapshot.id(), snapshot.sizeBytes(), snapshot.time()));
-
-        return present.size();
+        int recorded = 0;
+        for (RepositorySnapshot snapshot : present) {
+            UUID owner = snapshot.planId() != null ? snapshot.planId() : planId;
+            if (owner == null) {
+                // Ein Repository kann Snapshots enthalten, die zu keinem Plan dieser
+                // Anwendung gehoeren -- von einem geloeschten Plan, einem anderen Server
+                // oder von Hand angelegt. Sie bleiben, wo sie sind; nur ins Verzeichnis
+                // kommen sie nicht, denn dort haengt jeder Eintrag an einem Plan.
+                continue;
+            }
+            record(null, owner, targetId, snapshot.id(), snapshot.sizeBytes(), snapshot.time());
+            recorded++;
+        }
+        return recorded;
     }
 
-    /** Ein Snapshot, wie restic ihn meldet. */
-    public record RepositorySnapshot(String id, Instant time, Long sizeBytes) {
+    /**
+     * Ein Snapshot, wie restic ihn meldet.
+     *
+     * @param planId Plan laut Kennzeichnung im Repository, oder {@code null}, wenn sie sich
+     *               keinem hier bekannten Plan zuordnen laesst
+     */
+    public record RepositorySnapshot(String id, Instant time, Long sizeBytes, UUID planId) {
     }
 }
