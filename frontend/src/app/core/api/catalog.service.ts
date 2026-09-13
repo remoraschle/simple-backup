@@ -1,9 +1,9 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Plan, Source, Target } from './models';
+import { Plan, RetentionPolicy, Source, Target } from './models';
 
-/** Zugriff auf Quellen, Ziele und Pläne. */
+/** Zugriff auf Quellen, Ziele, Pläne und Aufbewahrungsregeln. */
 @Injectable({ providedIn: 'root' })
 export class CatalogService {
   private readonly http = inject(HttpClient);
@@ -54,5 +54,17 @@ export class CatalogService {
 
   deletePlan(id: string): Observable<void> {
     return this.http.delete<void>(`/api/plans/${id}`);
+  }
+
+  listRetentionPolicies(): Observable<RetentionPolicy[]> {
+    return this.http.get<RetentionPolicy[]>('/api/retention-policies');
+  }
+
+  createRetentionPolicy(request: unknown): Observable<RetentionPolicy> {
+    return this.http.post<RetentionPolicy>('/api/retention-policies', request);
+  }
+
+  deleteRetentionPolicy(id: string): Observable<void> {
+    return this.http.delete<void>(`/api/retention-policies/${id}`);
   }
 }

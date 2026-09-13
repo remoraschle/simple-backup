@@ -159,6 +159,80 @@ export interface RunDetail {
   readonly steps: RunStep[];
 }
 
+/**
+ * Grossvater-Vater-Sohn-Regel.
+ *
+ * <p>Ein leeres Feld heisst „diese Stufe zählt nicht". Eine Regel, die nichts behält, lehnt
+ * das Backend ab — sie würde beim ersten Aufräumen alles löschen.
+ */
+export interface RetentionRule {
+  readonly keepLast: number | null;
+  readonly keepHourly: number | null;
+  readonly keepDaily: number | null;
+  readonly keepWeekly: number | null;
+  readonly keepMonthly: number | null;
+  readonly keepYearly: number | null;
+  readonly keepWithinDays: number | null;
+}
+
+export interface RetentionPolicy {
+  readonly id: string;
+  readonly name: string;
+  readonly rule: RetentionRule;
+}
+
+export type ChannelType = 'PUSHOVER' | 'WEBHOOK';
+
+export type Severity = 'INFO' | 'WARNING' | 'CRITICAL';
+
+export interface PushoverChannelConfig {
+  readonly type: 'PUSHOVER';
+  readonly credentialId: string;
+  readonly device: string | null;
+  /** Verlangt bei kritischen Meldungen eine Quittung — Pushover wiederholt bis dahin. */
+  readonly emergency: boolean;
+  readonly retrySeconds: number | null;
+  readonly expireSeconds: number | null;
+}
+
+export interface WebhookChannelConfig {
+  readonly type: 'WEBHOOK';
+  readonly url: string;
+  readonly headerName: string | null;
+  readonly credentialId: string | null;
+}
+
+export type ChannelConfig = PushoverChannelConfig | WebhookChannelConfig;
+
+export interface NotificationChannel {
+  readonly id: string;
+  readonly name: string;
+  readonly type: ChannelType;
+  readonly config: ChannelConfig;
+  readonly enabled: boolean;
+  readonly minSeverity: Severity;
+  readonly createdAt: string;
+}
+
+export type OutboxStatus = 'PENDING' | 'SENT' | 'FAILED' | 'ABANDONED';
+
+/** Eine Meldung auf dem Weg zu einem Kanal. */
+export interface OutboxEntry {
+  readonly id: string;
+  readonly channelId: string;
+  readonly eventType: string;
+  readonly severity: Severity;
+  readonly title: string;
+  readonly body: string;
+  readonly status: OutboxStatus;
+  readonly attempts: number;
+  readonly lastError: string | null;
+  readonly planId: string | null;
+  readonly runId: string | null;
+  readonly createdAt: string;
+  readonly sentAt: string | null;
+}
+
 export interface Page<T> {
   readonly content: T[];
   readonly totalElements: number;

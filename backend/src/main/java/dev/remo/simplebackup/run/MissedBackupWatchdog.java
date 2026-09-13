@@ -121,8 +121,15 @@ class MissedBackupWatchdog {
     private static String humanize(Duration duration) {
         long hours = duration.toHours();
         if (hours < 1) {
-            return duration.toMinutes() + " Minuten";
+            return amount(duration.toMinutes(), "Minute", "Minuten");
         }
-        return hours < 48 ? hours + " Stunden" : duration.toDays() + " Tage";
+        return hours < 48
+                ? amount(hours, "Stunde", "Stunden")
+                : amount(duration.toDays(), "Tag", "Tage");
+    }
+
+    /** Einzahl und Mehrzahl getrennt -- "1 Minuten" liest sich wie ein Fehler im Werkzeug. */
+    private static String amount(long value, String one, String many) {
+        return value + " " + (value == 1 ? one : many);
     }
 }

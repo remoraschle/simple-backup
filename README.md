@@ -10,13 +10,18 @@ wiederherstellbar.
 
 ## Status
 
-**M0–M2 weitgehend abgeschlossen.** Das Werkzeug sichert: Pläne mit mehreren Zielen,
-Zeitplanung, Ausführung in Containern, Lauf-Historie mit Teilerfolg. Ein End-to-End-Test
-sichert mit echtem restic und stellt die Dateien wieder her.
+**M0–M3 abgeschlossen.** Das Werkzeug sichert und meldet sich, wenn etwas nicht stimmt:
+Pläne mit mehreren Zielen, Zeitplanung, Ausführung in Containern, Lauf-Historie mit
+Teilerfolg und Live-Protokoll, vollständige Oberfläche. Dazu Benachrichtigungen über
+Pushover und Webhook, Aufbewahrung nach Großvater-Vater-Sohn und ein Totmannschalter, der
+Alarm schlägt, wenn eine Sicherung ausbleibt — der gefährlichere Fall gegenüber dem
+Fehlschlag, denn ein ausgebliebener Lauf meldet sich nie von selbst.
 
-Noch offen für M2: Live-Logs per Server-Sent Events und die Oberfläche für Pläne, Quellen,
-Ziele und Läufe. Danach M3 (Benachrichtigung, Aufbewahrung, Totmannschalter) und M4
-(Wiederherstellung über die Oberfläche).
+End-to-End-Tests sichern mit echtem restic, stellen die Dateien wieder her und belegen, dass
+die Aufbewahrungsregel eines Plans die Snapshots anderer Pläne unberührt lässt.
+
+Als Nächstes M4: Wiederherstellung über die Oberfläche, Snapshot-Browser und automatischer
+Restore-Test.
 
 ## Dokumentation
 

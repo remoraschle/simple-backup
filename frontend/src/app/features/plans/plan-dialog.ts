@@ -8,6 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { CatalogService } from '../../core/api/catalog.service';
+import { NotifyOn } from '../../core/api/models';
 
 /** Gebräuchliche Zeitpläne, damit niemand cron-Syntax nachschlagen muss. */
 const SCHEDULE_PRESETS = [
@@ -38,6 +39,17 @@ export class PlanDialog {
   protected readonly presets = SCHEDULE_PRESETS;
   protected readonly sources = toSignal(this.catalog.listSources(), { initialValue: [] });
   protected readonly targets = toSignal(this.catalog.listTargets(), { initialValue: [] });
+  protected readonly policies = toSignal(this.catalog.listRetentionPolicies(), {
+    initialValue: [],
+  });
+
+  /** Wie oft spätestens eine erfolgreiche Sicherung erwartet wird. */
+  protected readonly watchdogPresets = [
+    { label: 'Nicht überwachen', value: null },
+    { label: 'Täglich', value: 24 * 60 },
+    { label: 'Alle zwei Tage', value: 48 * 60 },
+    { label: 'Wöchentlich', value: 7 * 24 * 60 },
+  ] as const;
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(100)]],
@@ -48,6 +60,9 @@ export class PlanDialog {
     timezone: ['Europe/Zurich', Validators.required],
     enabled: [true],
     timeoutMinutes: [360, [Validators.required, Validators.min(1)]],
+    retentionPolicyId: [null as string | null],
+    notifyOn: ['FAILURE' as NotifyOn, Validators.required],
+    expectedIntervalMinutes: [null as number | null],
   });
 
   protected usePreset(value: string): void {
@@ -65,15 +80,15 @@ export class PlanDialog {
       description: value.description || null,
       sourceId: value.sourceId,
       targetIds: value.targetIds,
-      retentionPolicyId: null,
+      retentionPolicyId: value.retentionPolicyId || null,
       cronExpression: value.cronExpression,
       timezone: value.timezone,
       enabled: value.enabled,
       timeoutMinutes: value.timeoutMinutes,
       maxRetries: 2,
       missedRunPolicy: 'SKIP',
-      notifyOn: 'FAILURE',
-      expectedIntervalMinutes: null,
+      notifyOn: value.notifyOn,
+      expectedIntervalMinutes: value.expectedIntervalMinutes,
     });
   }
 }

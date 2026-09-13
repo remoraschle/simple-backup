@@ -5,6 +5,10 @@ import {
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
+import {
+  MAT_FORM_FIELD_DEFAULT_OPTIONS,
+  MatFormFieldDefaultOptions,
+} from '@angular/material/form-field';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { errorInterceptor } from './core/api/error.interceptor';
@@ -15,6 +19,14 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
+
+    // Hinweise unter einem Feld duerfen mehrzeilig sein, ohne ins naechste Feld zu ragen.
+    // Material reserviert sonst genau eine Zeile und schneidet den Rest ab -- ausgerechnet
+    // dort, wo erklaert wird, was einzutragen ist.
+    {
+      provide: MAT_FORM_FIELD_DEFAULT_OPTIONS,
+      useValue: { subscriptSizing: 'dynamic' } as MatFormFieldDefaultOptions,
+    },
 
     provideHttpClient(
       withInterceptors([errorInterceptor]),

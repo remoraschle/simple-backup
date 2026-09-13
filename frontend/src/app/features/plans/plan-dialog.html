@@ -73,6 +73,42 @@
       >
     </mat-form-field>
 
+    <mat-form-field class="mt-4">
+      <mat-label>Aufbewahrung</mat-label>
+      <mat-select formControlName="retentionPolicyId">
+        <mat-option [value]="null">Keine — nichts wird gelöscht</mat-option>
+        @for (policy of policies(); track policy.id) {
+          <mat-option [value]="policy.id">{{ policy.name }}</mat-option>
+        }
+      </mat-select>
+      <mat-hint>
+        Ohne Regel bleibt jede Sicherung liegen, bis das Ziel voll ist. Regeln stehen unter
+        Einstellungen.
+      </mat-hint>
+    </mat-form-field>
+
+    <mat-form-field class="mt-4">
+      <mat-label>Benachrichtigen</mat-label>
+      <mat-select formControlName="notifyOn">
+        <mat-option value="FAILURE">Nur bei Problemen</mat-option>
+        <mat-option value="ALWAYS">Bei jedem Lauf</mat-option>
+        <mat-option value="NEVER">Gar nicht</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field class="mt-4">
+      <mat-label>Spätestens erwartet</mat-label>
+      <mat-select formControlName="expectedIntervalMinutes">
+        @for (preset of watchdogPresets; track preset.label) {
+          <mat-option [value]="preset.value">{{ preset.label }}</mat-option>
+        }
+      </mat-select>
+      <mat-hint>
+        Bleibt eine erfolgreiche Sicherung länger aus, wird Alarm geschlagen — der gefährlichere
+        Fall gegenüber dem Fehlschlag, denn ein ausgebliebener Lauf meldet sich nie von selbst.
+      </mat-hint>
+    </mat-form-field>
+
     <mat-slide-toggle formControlName="enabled" class="mt-6">Plan ist aktiv</mat-slide-toggle>
   </form>
 </mat-dialog-content>

@@ -89,6 +89,18 @@ class MissedBackupWatchdogTest {
     }
 
     @Test
+    @DisplayName("Einzahl und Mehrzahl stimmen auch im Meldungstext")
+    void bodyUsesCorrectGrammar() {
+        // "Erwartet wird alle 1 Minuten" liest sich wie ein Fehler im Werkzeug.
+        planExpecting(60, true, NotifyOn.FAILURE, NOW.minus(Duration.ofDays(30)));
+        lastSuccessfulRunAt(NOW.minus(Duration.ofMinutes(120)));
+
+        watchdog.checkForMissedBackups();
+
+        assertThat(published().body()).contains("alle 1 Stunde").doesNotContain("1 Stunden");
+    }
+
+    @Test
     @DisplayName("Eine Sicherung innerhalb des Intervalls loest nichts aus")
     void staysSilentWhileInTime() {
         planExpecting(24 * 60, true, NotifyOn.FAILURE, NOW.minus(Duration.ofDays(30)));

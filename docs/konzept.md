@@ -587,10 +587,10 @@ simple-backup/
 
 | Meilenstein | Inhalt | Ergebnis |
 |---|---|---|
-| **M0 — Gerüst** | Repo, Gradle/Angular-Skelett, Compose inkl. Socket-Proxy, CI, Flyway, Auth, Health | Es läuft, es ist leer |
-| **M1 — Runner-Fundament** | `BackupExecutor`, `DockerJobExecutor`, Host-Pfad-Übersetzung, Secret-tmpfs, Label-Reaper, Wiederanhängen nach Neustart, Runner-Image | Ein Container wird gestartet, überwacht, ausgewertet |
-| **M2 — Erstes echtes Backup** | Quelle „lokaler Pfad/NAS", Ziel „lokal + S3", restic-Engine, Scheduler, Lauf-Historie, Dashboard, Live-Logs | Ordner → S3, geplant, sichtbar |
-| **M3 — Vertrauen** | Benachrichtigungen (Pushover + Webhook), Retention/GFS, Dead-Man-Switch | Man erfährt, wenn es kaputt ist |
+| **M0 — Gerüst** ✅ | Repo, Gradle/Angular-Skelett, Compose inkl. Socket-Proxy, CI, Flyway, Auth, Health | Es läuft, es ist leer |
+| **M1 — Runner-Fundament** ✅ | `BackupExecutor`, `DockerJobExecutor`, Host-Pfad-Übersetzung, Secret-tmpfs, Label-Reaper, Wiederanhängen nach Neustart, Runner-Image | Ein Container wird gestartet, überwacht, ausgewertet |
+| **M2 — Erstes echtes Backup** ✅ | Quelle „lokaler Pfad/NAS", Ziel „lokal + S3", restic-Engine, Scheduler, Lauf-Historie, Dashboard, Live-Logs | Ordner → S3, geplant, sichtbar |
+| **M3 — Vertrauen** ✅ | Benachrichtigungen (Pushover + Webhook), Retention/GFS, Dead-Man-Switch | Man erfährt, wenn es kaputt ist |
 | **M4 — Wiederherstellung** | TreeTable auf CDK-Basis, Snapshot-Browser, Restore, Datei-Download, `restic check`, automatischer Restore-Test | Backups sind nachweislich gut |
 | **M5 — Postgres & GitHub** | pg_dump-Pipeline mit versionspassendem Runner, Globals, Dump-Verifikation, GitHub-Discovery + Mirror + Metadaten | Die beiden wertvollsten Quellen |
 | **M6 — S3, SFTP, rsync-Mirror** | rclone-Adapter, Hostkey-Handling, Mirror-Modus | Quellmatrix im Wesentlichen vollständig |

@@ -62,7 +62,9 @@ describe('formatRelative', () => {
     // "vor 1 Minuten" stand nach jedem frisch beendeten Lauf in der Liste.
     const vorEinerMinute = new Date(Date.now() - 65 * 1000).toISOString();
     const vorEinerStunde = new Date(Date.now() - 3600 * 1000).toISOString();
-    const inEinemTag = new Date(Date.now() + 86400 * 1000).toISOString();
+    // Knapp ueber einem Tag: Genau 86400 Sekunden liegen auf der Grenze, und die
+    // Laufzeit des Tests selbst entscheidet dann, auf welcher Seite der Wert landet.
+    const inEinemTag = new Date(Date.now() + 87000 * 1000).toISOString();
 
     expect(formatRelative(vorEinerMinute)).toBe('vor 1 Minute');
     expect(formatRelative(vorEinerStunde)).toBe('vor 1 Stunde');

@@ -1,0 +1,216 @@
+<div class="grid gap-6 lg:grid-cols-[1fr_420px]">
+  <div>
+    <h2 class="mb-3 text-lg font-medium">Kanäle</h2>
+
+    @if (channels().length === 0) {
+      <sb-empty-state
+        icon="notifications_off"
+        title="Noch kein Kanal eingerichtet"
+        description="Ohne Kanal meldet sich dieses Werkzeug nie — auch nicht, wenn eine Sicherung
+                     ausbleibt. Genau das ist der Zustand, in dem man Schweigen für ein gutes
+                     Zeichen hält."
+      />
+    } @else {
+      <div class="overflow-x-auto rounded-lg border border-outline-variant">
+        <table mat-table [dataSource]="channels()" class="w-full">
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let channel">
+              <span class="font-medium">{{ channel.name }}</span>
+              @if (!channel.enabled) {
+                <span class="ml-2 text-sm text-on-surface-variant">abgeschaltet</span>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="type">
+            <th mat-header-cell *matHeaderCellDef>Weg</th>
+            <td mat-cell *matCellDef="let channel" class="max-w-xs truncate text-sm">
+              {{ describe(channel) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="severity">
+            <th mat-header-cell *matHeaderCellDef>Ab Stufe</th>
+            <td mat-cell *matCellDef="let channel" class="text-sm text-on-surface-variant">
+              {{ severityLabel(channel.minSeverity) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef aria-label="Aktionen"></th>
+            <td mat-cell *matCellDef="let channel" class="text-right whitespace-nowrap">
+              <button
+                matIconButton
+                (click)="test(channel)"
+                matTooltip="Probemeldung senden"
+                [attr.aria-label]="'Kanal ' + channel.name + ' testen'"
+              >
+                <mat-icon>send</mat-icon>
+              </button>
+              <button
+                matIconButton
+                (click)="remove(channel)"
+                matTooltip="Löschen"
+                [attr.aria-label]="'Kanal ' + channel.name + ' löschen'"
+              >
+                <mat-icon>delete_outline</mat-icon>
+              </button>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-row *matRowDef="let row; columns: columns"></tr>
+        </table>
+      </div>
+    }
+
+    <h2 class="mt-8 mb-3 text-lg font-medium">Postausgang</h2>
+    <p class="mt-0 mb-3 text-sm text-on-surface-variant">
+      Beantwortet die Frage, auf die es im Ernstfall ankommt: Kam die Meldung an — und wenn nicht,
+      warum nicht?
+    </p>
+
+    @if (outbox().length === 0) {
+      <p class="text-on-surface-variant">Noch nichts versendet.</p>
+    } @else {
+      <div class="overflow-x-auto rounded-lg border border-outline-variant">
+        <table mat-table [dataSource]="outbox()" class="w-full">
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Zustand</th>
+            <td mat-cell *matCellDef="let entry">
+              @switch (entry.status) {
+                @case ('SENT') {
+                  <span class="text-status-success">zugestellt</span>
+                }
+                @case ('PENDING') {
+                  <span class="text-status-running">unterwegs</span>
+                }
+                @default {
+                  <span class="text-status-failed" [matTooltip]="entry.lastError ?? ''">
+                    aufgegeben
+                  </span>
+                }
+              }
+              @if (entry.attempts > 1) {
+                <span class="ml-1 text-sm text-on-surface-variant">
+                  ({{ entry.attempts }} Versuche)
+                </span>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="title">
+            <th mat-header-cell *matHeaderCellDef>Meldung</th>
+            <td mat-cell *matCellDef="let entry">
+              <span>{{ entry.title }}</span>
+              @if (entry.lastError) {
+                <p class="m-0 max-w-md truncate text-sm text-status-failed">
+                  {{ entry.lastError }}
+                </p>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="created">
+            <th mat-header-cell *matHeaderCellDef>Wann</th>
+            <td mat-cell *matCellDef="let entry" class="text-sm text-on-surface-variant">
+              <span [matTooltip]="entry.createdAt | date: 'dd.MM.yyyy HH:mm'">
+                {{ relative(entry.createdAt) }}
+              </span>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="outboxColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: outboxColumns"></tr>
+        </table>
+      </div>
+    }
+  </div>
+
+  <mat-card class="self-start">
+    <mat-card-content class="pt-6">
+      <h2 class="mt-0 mb-2 text-lg font-medium">Kanal einrichten</h2>
+
+      <form [formGroup]="form" (ngSubmit)="save()" class="flex flex-col gap-2 pt-2">
+        <mat-form-field>
+          <mat-label>Name</mat-label>
+          <input matInput formControlName="name" />
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Weg</mat-label>
+          <mat-select formControlName="type">
+            <mat-option value="PUSHOVER">Pushover</mat-option>
+            <mat-option value="WEBHOOK">Webhook</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        @if (form.controls.type.value === 'PUSHOVER') {
+          <mat-form-field>
+            <mat-label>Zugang</mat-label>
+            <mat-select formControlName="credentialId">
+              @for (credential of pushoverCredentials(); track credential.id) {
+                <mat-option [value]="credential.id">{{ credential.name }}</mat-option>
+              }
+            </mat-select>
+            @if (pushoverCredentials().length === 0) {
+              <mat-hint> Zuerst unter „Zugangsdaten“ einen Pushover-Zugang hinterlegen </mat-hint>
+            }
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>Gerät (optional)</mat-label>
+            <input matInput formControlName="device" />
+            <mat-hint>Leer lassen für alle Geräte</mat-hint>
+          </mat-form-field>
+
+          <mat-slide-toggle formControlName="emergency" class="mt-2">
+            Kritisches mit Quittierungspflicht
+          </mat-slide-toggle>
+          <p class="mt-1 mb-0 text-sm text-on-surface-variant">
+            Pushover wiederholt dann, bis jemand bestätigt. Ein Alarm, den man im Schlaf wegwischt,
+            ist keiner.
+          </p>
+        } @else {
+          <mat-form-field>
+            <mat-label>Adresse</mat-label>
+            <input matInput formControlName="url" placeholder="https://…" />
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>Kopffeld (optional)</mat-label>
+            <input matInput formControlName="headerName" placeholder="Authorization" />
+          </mat-form-field>
+
+          @if (form.controls.headerName.value) {
+            <mat-form-field>
+              <mat-label>Wert des Kopffelds</mat-label>
+              <mat-select formControlName="headerCredentialId">
+                @for (credential of headerCredentials(); track credential.id) {
+                  <mat-option [value]="credential.id">{{ credential.name }}</mat-option>
+                }
+              </mat-select>
+              <mat-hint
+                >Aus den hinterlegten Zugängen — ein Token gehört nicht ins Klartextfeld</mat-hint
+              >
+            </mat-form-field>
+          }
+        }
+
+        <mat-form-field class="mt-2">
+          <mat-label>Ab welcher Stufe</mat-label>
+          <mat-select formControlName="minSeverity">
+            @for (severity of severities; track severity.value) {
+              <mat-option [value]="severity.value">{{ severity.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <button matButton="filled" type="submit" class="mt-2" [disabled]="form.invalid">
+          Speichern
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
+</div>

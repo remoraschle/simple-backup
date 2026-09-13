@@ -1,109 +1,24 @@
 <sb-page-header
   title="Einstellungen"
-  subtitle="Zugangsdaten werden verschlüsselt abgelegt und lassen sich nach dem Speichern nicht wieder auslesen."
+  subtitle="Zugänge, Benachrichtigungen und Aufbewahrung — was für alle Pläne gilt."
 />
 
-<div class="grid gap-6 lg:grid-cols-[1fr_420px]">
-  <div>
-    <h2 class="mb-3 text-lg font-medium">Hinterlegte Zugänge</h2>
+<mat-tab-group>
+  <mat-tab label="Zugangsdaten">
+    <div class="pt-6">
+      <sb-credentials-panel />
+    </div>
+  </mat-tab>
 
-    @if (items().length === 0) {
-      <p class="text-on-surface-variant">Noch keine Zugänge hinterlegt.</p>
-    } @else {
-      <div class="overflow-x-auto rounded-lg border border-outline-variant">
-        <table mat-table [dataSource]="items()" class="w-full">
-          <ng-container matColumnDef="name">
-            <th mat-header-cell *matHeaderCellDef>Name</th>
-            <td mat-cell *matCellDef="let item">
-              <span class="font-medium">{{ item.name }}</span>
-              @if (item.description) {
-                <p class="m-0 text-sm text-on-surface-variant">{{ item.description }}</p>
-              }
-            </td>
-          </ng-container>
+  <mat-tab label="Benachrichtigungen">
+    <div class="pt-6">
+      <sb-channels-panel />
+    </div>
+  </mat-tab>
 
-          <ng-container matColumnDef="type">
-            <th mat-header-cell *matHeaderCellDef>Art</th>
-            <td mat-cell *matCellDef="let item">{{ labelFor(item.type) }}</td>
-          </ng-container>
-
-          <ng-container matColumnDef="created">
-            <th mat-header-cell *matHeaderCellDef>Angelegt</th>
-            <td mat-cell *matCellDef="let item" class="text-sm text-on-surface-variant">
-              {{ item.createdAt | date: 'dd.MM.yyyy' }}
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef aria-label="Aktionen"></th>
-            <td mat-cell *matCellDef="let item" class="text-right">
-              <button
-                matIconButton
-                (click)="remove(item)"
-                matTooltip="Löschen"
-                [attr.aria-label]="'Zugang ' + item.name + ' löschen'"
-              >
-                <mat-icon>delete_outline</mat-icon>
-              </button>
-            </td>
-          </ng-container>
-
-          <tr mat-header-row *matHeaderRowDef="columns"></tr>
-          <tr mat-row *matRowDef="let row; columns: columns"></tr>
-        </table>
-      </div>
-    }
-  </div>
-
-  <mat-card class="self-start">
-    <mat-card-header class="pt-6">
-      <mat-card-title>Zugang hinterlegen</mat-card-title>
-    </mat-card-header>
-
-    <mat-card-content>
-      <form [formGroup]="form" (ngSubmit)="save()" class="flex flex-col gap-2 pt-4">
-        <mat-form-field>
-          <mat-label>Name</mat-label>
-          <input matInput formControlName="name" />
-        </mat-form-field>
-
-        <mat-form-field>
-          <mat-label>Art</mat-label>
-          <mat-select formControlName="type">
-            @for (type of types; track type.value) {
-              <mat-option [value]="type.value">{{ type.label }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field>
-          <mat-label>Beschreibung</mat-label>
-          <input matInput formControlName="description" />
-        </mat-form-field>
-
-        <mat-form-field>
-          <mat-label>Wert</mat-label>
-          <textarea matInput formControlName="secret" rows="3"></textarea>
-          @if (hintFor(form.controls.type.value)) {
-            <mat-hint>{{ hintFor(form.controls.type.value) }}</mat-hint>
-          }
-        </mat-form-field>
-
-        <p class="mt-6 mb-0 flex gap-2 rounded-md bg-surface-container-high p-3 text-sm">
-          <mat-icon class="h-5 w-5 shrink-0 text-xl leading-5 text-on-surface-variant"
-            >info_outline</mat-icon
-          >
-          <span>
-            Der Wert wird verschlüsselt gespeichert und erscheint nie wieder in der Oberfläche oder
-            in einem Protokoll. Ein Repository-Passwort gehört zusätzlich in den Passwortmanager —
-            ohne es sind die Sicherungen verloren.
-          </span>
-        </p>
-
-        <button matButton="filled" type="submit" class="mt-2" [disabled]="form.invalid">
-          Speichern
-        </button>
-      </form>
-    </mat-card-content>
-  </mat-card>
-</div>
+  <mat-tab label="Aufbewahrung">
+    <div class="pt-6">
+      <sb-retention-panel />
+    </div>
+  </mat-tab>
+</mat-tab-group>
