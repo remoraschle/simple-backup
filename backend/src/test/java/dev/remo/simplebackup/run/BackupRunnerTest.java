@@ -3,6 +3,7 @@ package dev.remo.simplebackup.run;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.remo.simplebackup.catalog.ExecutablePlan;
+import dev.remo.simplebackup.catalog.NotifyOn;
 import dev.remo.simplebackup.catalog.ExecutableTarget;
 import dev.remo.simplebackup.catalog.SourceConfig;
 import dev.remo.simplebackup.catalog.TargetConfig;
@@ -11,6 +12,7 @@ import dev.remo.simplebackup.engine.MountTranslator;
 import dev.remo.simplebackup.engine.VolumeMount;
 import dev.remo.simplebackup.restic.ResticOutputParser;
 import dev.remo.simplebackup.secret.CredentialService;
+import dev.remo.simplebackup.shared.RetentionRule;
 import dev.remo.simplebackup.shared.SecretRedactor;
 import java.time.Duration;
 import java.util.List;
@@ -46,7 +48,13 @@ class BackupRunnerTest {
                 new VolumeMount("/mnt/nas", "/mnt/nas", false, false)));
 
         runner = new BackupRunner(executor, mounts, credentials,
-                new ResticOutputParser(new ObjectMapper()), new SecretRedactor(), new ObjectMapper());
+                new ResticOutputParser(new ObjectMapper()), new SecretRedactor(), new ObjectMapper(),
+                testProperties());
+    }
+
+    /** Kurze Zeitlimits: Ein Test soll nicht stundenlang auf ein Aufraeumen warten. */
+    private static RunProperties testProperties() {
+        return new RunProperties(null, null, 2, null, null, Duration.ofMinutes(2), null, null);
     }
 
     private static ExecutableTarget localTarget(String name, String path) {
@@ -55,9 +63,94 @@ class BackupRunnerTest {
     }
 
     private static ExecutablePlan planWith(ExecutableTarget... targets) {
+        return planWith(null, targets);
+    }
+
+    private static ExecutablePlan planWith(RetentionRule retention, ExecutableTarget... targets) {
         return new ExecutablePlan(UUID.randomUUID(), "Fotos", "plan-fotos", "tag-fotos",
                 new SourceConfig.LocalPath(List.of("/sources/fotos"), List.of("*.tmp"), false),
-                List.of(targets), Duration.ofMinutes(30), null);
+                List.of(targets), Duration.ofMinutes(30), retention, NotifyOn.FAILURE);
+    }
+
+    @Nested
+    @DisplayName("Aufbewahrung")
+    class Retention {
+
+        @Test
+        @DisplayName("Ohne Aufbewahrungsregel wird nichts geloescht")
+        void withoutRuleNothingIsDeleted() {
+            executor.whenCommandContains("config", 0);
+
+            runner.run(planWith(localTarget("NAS", "/mnt/nas/backups")), listener);
+
+            assertThat(executor.commands()).noneMatch(command -> command.contains("forget"));
+        }
+
+        @Test
+        @DisplayName("Mit Regel wird nach der Sicherung aufgeraeumt, eingegrenzt auf den Plan")
+        void appliesRuleScopedToThePlan() {
+            // Ohne --host und --tag wuerde die Regel eines Plans die Snapshots aller anderen
+            // Plaene im selben Repository mitloeschen.
+            executor.whenCommandContains("config", 0);
+
+            runner.run(planWith(new RetentionRule(null, null, 7, 4, null, null, null),
+                    localTarget("NAS", "/mnt/nas/backups")), listener);
+
+            String forget = executor.commands().stream()
+                    .filter(command -> command.contains("forget"))
+                    .findFirst()
+                    .map(command -> String.join(" ", command))
+                    .orElseThrow(() -> new AssertionError("Es wurde nicht aufgeraeumt"));
+
+            assertThat(forget)
+                    .contains("--host plan-fotos")
+                    .contains("--tag tag-fotos")
+                    .contains("--keep-daily 7")
+                    .contains("--keep-weekly 4")
+                    .contains("--prune");
+        }
+
+        @Test
+        @DisplayName("Aufgeraeumt wird erst nach der Sicherung")
+        void prunesAfterBackup() {
+            // Andersherum loeschte die Regel alte Snapshots, ohne dass ein neuer dazugekommen
+            // waere -- und ein gescheitertes Backup haette die Aufbewahrung schon verbraucht.
+            executor.whenCommandContains("config", 0);
+
+            runner.run(planWith(RetentionRule.sensibleDefault(), localTarget("NAS", "/mnt/nas/backups")),
+                    listener);
+
+            assertThat(listener.descriptions())
+                    .containsExactly("Repository prüfen", "Sicherung auf NAS",
+                            "Alte Sicherungen aufräumen auf NAS");
+        }
+
+        @Test
+        @DisplayName("Eine gescheiterte Sicherung wird gar nicht erst aufgeraeumt")
+        void doesNotPruneAfterFailedBackup() {
+            executor.whenCommandContains("config", 0)
+                    .whenCommandContains("backup", 1, "Fatal: unable to read source");
+
+            runner.run(planWith(RetentionRule.sensibleDefault(), localTarget("NAS", "/mnt/nas/backups")),
+                    listener);
+
+            assertThat(executor.commands()).noneMatch(command -> command.contains("forget"));
+        }
+
+        @Test
+        @DisplayName("Ein gescheitertes Aufraeumen macht die Sicherung nicht ungueltig")
+        void failedPruneKeepsTheBackupValid() {
+            // Die Daten sind geschrieben. Wer das Gegenteil meldet, treibt jemanden dazu,
+            // ein gelungenes Backup noch einmal laufen zu lassen.
+            executor.whenCommandContains("config", 0)
+                    .whenCommandContains("forget", 1, "Fatal: repository is locked");
+
+            var outcomes = runner.run(planWith(RetentionRule.sensibleDefault(),
+                    localTarget("NAS", "/mnt/nas/backups")), listener);
+
+            assertThat(outcomes).singleElement().satisfies(outcome ->
+                    assertThat(outcome.successful()).isTrue());
+        }
     }
 
     @Nested

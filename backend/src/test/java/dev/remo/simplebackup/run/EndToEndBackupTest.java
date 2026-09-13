@@ -3,6 +3,7 @@ package dev.remo.simplebackup.run;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.remo.simplebackup.catalog.ExecutablePlan;
+import dev.remo.simplebackup.catalog.NotifyOn;
 import dev.remo.simplebackup.catalog.ExecutableTarget;
 import dev.remo.simplebackup.catalog.SourceConfig;
 import dev.remo.simplebackup.catalog.TargetConfig;
@@ -15,6 +16,7 @@ import dev.remo.simplebackup.engine.VolumeMount;
 import dev.remo.simplebackup.restic.ResticCommands;
 import dev.remo.simplebackup.restic.ResticOutputParser;
 import dev.remo.simplebackup.secret.CredentialService;
+import dev.remo.simplebackup.shared.RetentionRule;
 import dev.remo.simplebackup.shared.SecretRedactor;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -91,16 +93,26 @@ class EndToEndBackupTest {
         executor = new LocalProcessExecutor(new SecretRedactor());
         listener = new RecordingProgressListener();
         runner = new BackupRunner(executor, mounts, credentials,
-                new ResticOutputParser(new ObjectMapper()), new SecretRedactor(), new ObjectMapper());
+                new ResticOutputParser(new ObjectMapper()), new SecretRedactor(), new ObjectMapper(),
+                testProperties());
+    }
+
+    /** Kurze Zeitlimits: Ein Test soll nicht stundenlang auf ein Aufraeumen warten. */
+    private static RunProperties testProperties() {
+        return new RunProperties(null, null, 2, null, null, Duration.ofMinutes(2), null, null);
     }
 
     private ExecutablePlan plan() {
+        return plan("plan-test", "tag-test", null);
+    }
+
+    private ExecutablePlan plan(String host, String tag, RetentionRule retention) {
         var target = new ExecutableTarget(UUID.randomUUID(), "Lokales Repository", TargetMode.RESTIC,
                 new TargetConfig.LocalPath(repositoryDirectory.toString(), PASSWORD_ID), true);
 
-        return new ExecutablePlan(UUID.randomUUID(), "Testplan", "plan-test", "tag-test",
+        return new ExecutablePlan(UUID.randomUUID(), "Testplan", host, tag,
                 new SourceConfig.LocalPath(List.of(sourceDirectory.toString()), List.of("*.tmp"), false),
-                List.of(target), Duration.ofMinutes(5), null);
+                List.of(target), Duration.ofMinutes(5), retention, NotifyOn.FAILURE);
     }
 
     @Test
@@ -173,6 +185,42 @@ class EndToEndBackupTest {
     }
 
     @Test
+    @DisplayName("Die Aufbewahrungsregel loescht wirklich alte Snapshots")
+    void retentionReallyDeletesOldSnapshots() throws Exception {
+        var keepOne = plan("plan-test", "tag-test", new RetentionRule(1, null, null, null, null, null, null));
+
+        runner.run(keepOne, listener);
+        var second = new RecordingProgressListener();
+        runner.run(keepOne, second);
+
+        assertThat(second.descriptions()).contains("Alte Sicherungen aufräumen auf Lokales Repository");
+        assertThat(snapshotCount("plan-test", "tag-test"))
+                .withFailMessage("Es sollte genau ein Snapshot uebrig bleiben:%n%s",
+                        String.join("\n", second.logLines))
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Die Regel eines Plans laesst die Snapshots anderer Plaene in Ruhe")
+    void retentionIsScopedToOnePlan() throws Exception {
+        // Der gefaehrlichste Fehler dieser Funktion: Mehrere Plaene teilen sich oft ein
+        // Repository. Ohne --host und --tag loeschte die Regel des einen die Sicherungen
+        // aller anderen -- und zwar unbemerkt, denn sein eigener Lauf bliebe gruen.
+        var withRetention = plan("plan-a", "tag-a", new RetentionRule(1, null, null, null, null, null, null));
+        var withoutRetention = plan("plan-b", "tag-b", null);
+
+        runner.run(withoutRetention, new RecordingProgressListener());
+        runner.run(withoutRetention, new RecordingProgressListener());
+        assertThat(snapshotCount("plan-b", "tag-b")).isEqualTo(2);
+
+        runner.run(withRetention, new RecordingProgressListener());
+        runner.run(withRetention, new RecordingProgressListener());
+
+        assertThat(snapshotCount("plan-a", "tag-a")).isEqualTo(1);
+        assertThat(snapshotCount("plan-b", "tag-b")).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("Das Repository-Passwort steht nicht im Protokoll")
     void passwordNeverAppearsInTheLog() {
         runner.run(plan(), listener);
@@ -180,15 +228,27 @@ class EndToEndBackupTest {
         assertThat(String.join("\n", listener.logLines)).doesNotContain(REPOSITORY_PASSWORD);
     }
 
+    /** Zaehlt die Snapshots eines Plans, indem restic selbst gefragt wird. */
+    private int snapshotCount(String host, String tag) throws Exception {
+        var output = new StringBuilder();
+        runRestic(ResticCommands.snapshots(host, tag), output::append);
+
+        return new ObjectMapper().readTree(output.toString()).size();
+    }
+
     /** Fuehrt ein restic-Kommando gegen dasselbe Repository aus, fuer die Gegenproben. */
     private int runRestic(List<String> command) throws Exception {
+        return runRestic(command, LogSink.discarding());
+    }
+
+    private int runRestic(List<String> command, LogSink sink) throws Exception {
         var request = ExecutionRequest.builder("egal", command.toArray(String[]::new))
                 .env("RESTIC_REPOSITORY", repositoryDirectory.toString())
                 .env("RESTIC_PASSWORD", REPOSITORY_PASSWORD)
                 .timeout(Duration.ofMinutes(5))
                 .build();
 
-        return executor.start(request, LogSink.discarding())
+        return executor.start(request, sink)
                 .awaitCompletion(Duration.ofMinutes(5))
                 .exitCode();
     }

@@ -41,6 +41,7 @@ public class RunService {
     private final RunEventPublisher events;
     private final CatalogService catalog;
     private final BackupRunner runner;
+    private final RunNotifier notifier;
     private final RunProperties properties;
 
     /**
@@ -56,12 +57,14 @@ public class RunService {
     private final Map<UUID, Thread> activeRuns = new ConcurrentHashMap<>();
 
     RunService(RunRepository runs, RunPersistence persistence, RunEventPublisher events,
-            CatalogService catalog, BackupRunner runner, RunProperties properties) {
+            CatalogService catalog, BackupRunner runner, RunNotifier notifier,
+            RunProperties properties) {
         this.runs = runs;
         this.persistence = persistence;
         this.events = events;
         this.catalog = catalog;
         this.runner = runner;
+        this.notifier = notifier;
         this.properties = properties;
         this.parallelRuns = new Semaphore(properties.maxParallelRuns());
     }
@@ -103,7 +106,7 @@ public class RunService {
         try {
             acquired = parallelRuns.tryAcquire(1, TimeUnit.HOURS);
             if (!acquired) {
-                finishWithError(runId, RunStatus.FAILED,
+                finishWithError(runId, planId, RunStatus.FAILED,
                         "Kein freier Platz fuer weitere gleichzeitige Laeufe");
                 return;
             }
@@ -122,16 +125,17 @@ public class RunService {
                 catalog.recordRunResult(planId, outcome.finishedAt(), outcome.status().name());
                 events.publish(runId, new RunEvent.Finished(outcome.status(), outcome.errorSummary()));
                 events.closeStream(runId);
+                notifier.runFinished(planId, runId, outcome.status(), outcome.errorSummary(), outcomes);
 
                 log.info("Lauf {} beendet: {}", runId, outcome.status());
             }
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            finishWithError(runId, RunStatus.CANCELLED, "Abgebrochen");
+            finishWithError(runId, planId, RunStatus.CANCELLED, "Abgebrochen");
         } catch (RuntimeException e) {
             log.error("Lauf {} unerwartet gescheitert", runId, e);
-            finishWithError(runId, RunStatus.FAILED, String.valueOf(e.getMessage()));
+            finishWithError(runId, planId, RunStatus.FAILED, String.valueOf(e.getMessage()));
         } finally {
             if (acquired) {
                 parallelRuns.release();
@@ -140,10 +144,17 @@ public class RunService {
         }
     }
 
-    private void finishWithError(UUID runId, RunStatus status, String message) {
+    /**
+     * Beendet einen Lauf, der nicht bis zu den Zielen gekommen ist.
+     *
+     * <p>Auch dieser Fall wird gemeldet -- gerade dieser: Ein Lauf, der schon am Laden des
+     * Plans scheitert, sichert nichts und faellt sonst niemandem auf.
+     */
+    private void finishWithError(UUID runId, UUID planId, RunStatus status, String message) {
         persistence.finish(runId, status, message);
         events.publish(runId, new RunEvent.Finished(status, message));
         events.closeStream(runId);
+        notifier.runFinished(planId, runId, status, message, List.of());
     }
 
     // ------------------------------------------------------------------ Abfrage

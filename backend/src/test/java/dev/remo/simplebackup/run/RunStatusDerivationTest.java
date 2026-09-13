@@ -30,6 +30,32 @@ class RunStatusDerivationTest {
         run.addStep(StepKind.ACQUIRE, null, "Beschaffung").finish(status, null, null);
     }
 
+    private void prune(StepStatus status) {
+        run.addStep(StepKind.PRUNE, TARGET_A, "Aufräumen").finish(status, null, null);
+    }
+
+    @Test
+    @DisplayName("Ein gescheitertes Aufraeumen aendert nichts am Erfolg")
+    void failedPruneKeepsSuccess() {
+        // Aufgeraeumt wird erst, wenn die Daten geschrieben sind. Der Lauf hat sein Ziel
+        // erreicht, auch wenn das Repository danach nicht kleiner wurde.
+        transfer(TARGET_A, StepStatus.SUCCESS);
+        prune(StepStatus.FAILED);
+
+        assertThat(run.deriveStatus()).isEqualTo(RunStatus.SUCCESS);
+    }
+
+    @Test
+    @DisplayName("Ein Aufraeumen im Zeitlimit macht den Lauf nicht zum Zeitlimit-Fall")
+    void prunesTimeoutDoesNotPoisonTheRun() {
+        // prune liest das halbe Repository und laeuft eher ins Zeitlimit als die Sicherung.
+        // Als TIMEOUT gemeldet stuende eine gelungene Sicherung als abgebrochen da.
+        transfer(TARGET_A, StepStatus.SUCCESS);
+        prune(StepStatus.TIMEOUT);
+
+        assertThat(run.deriveStatus()).isEqualTo(RunStatus.SUCCESS);
+    }
+
     @Test
     @DisplayName("Alle Ziele erfolgreich ergibt SUCCESS")
     void allTargetsSucceed() {

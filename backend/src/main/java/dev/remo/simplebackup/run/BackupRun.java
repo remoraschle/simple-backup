@@ -127,10 +127,15 @@ public class BackupRun {
     RunStatus deriveStatus() {
         List<RunStep> transfers = steps.stream().filter(step -> step.getKind() == StepKind.TRANSFER).toList();
 
-        if (steps.stream().anyMatch(step -> step.getStatus() == StepStatus.CANCELLED)) {
+        // Aufraeumen entscheidet nicht ueber den Lauf: Es laeuft erst, wenn die Daten
+        // bereits geschrieben sind. Ein Prune, der ins Zeitlimit laeuft, wuerde sonst eine
+        // gelungene Sicherung als abgebrochen ausweisen.
+        List<RunStep> decisive = steps.stream().filter(step -> step.getKind() != StepKind.PRUNE).toList();
+
+        if (decisive.stream().anyMatch(step -> step.getStatus() == StepStatus.CANCELLED)) {
             return RunStatus.CANCELLED;
         }
-        if (steps.stream().anyMatch(step -> step.getStatus() == StepStatus.TIMEOUT)) {
+        if (decisive.stream().anyMatch(step -> step.getStatus() == StepStatus.TIMEOUT)) {
             return RunStatus.TIMEOUT;
         }
 

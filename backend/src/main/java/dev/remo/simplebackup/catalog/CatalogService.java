@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -209,6 +210,22 @@ public class CatalogService {
                 .collect(Collectors.toMap(PlanRepository.PlanName::getId, PlanRepository.PlanName::getName));
     }
 
+    /**
+     * Name und Benachrichtigungsregel eines Plans.
+     *
+     * <p>Fuer Meldungen, die von einem Plan handeln, aber keinen ganzen ausfuehrbaren Plan
+     * brauchen -- etwa wenn schon das Laden des Plans gescheitert ist.
+     */
+    @Transactional(readOnly = true)
+    public Optional<PlanNotification> planNotification(UUID planId) {
+        return plans.findById(planId)
+                .map(plan -> new PlanNotification(plan.getName(), plan.getNotifyOn()));
+    }
+
+    /** Was gebraucht wird, um ueber einen Plan zu benachrichtigen. */
+    public record PlanNotification(String name, NotifyOn notifyOn) {
+    }
+
     @Transactional(readOnly = true)
     public List<PlanView> listPlans() {
         return plans.findAllByOrderByNameAsc().stream().map(CatalogService::toView).toList();
@@ -339,7 +356,8 @@ public class CatalogService {
                 objectMapper.readValue(plan.getSource().getConfig(), SourceConfig.class),
                 executableTargets,
                 java.time.Duration.ofMinutes(plan.getTimeoutMinutes()),
-                plan.getRetentionPolicy() == null ? null : plan.getRetentionPolicy().toRule());
+                plan.getRetentionPolicy() == null ? null : plan.getRetentionPolicy().toRule(),
+                plan.getNotifyOn());
     }
 
     /**

@@ -100,6 +100,21 @@ simplebackup:
     # starten -- gerade dann, wenn der Server ohnehin erst wieder hochgekommen ist.
     max-parallel-runs: ${SIMPLEBACKUP_MAX_PARALLEL_RUNS:2}
     scheduler-poll-interval: 30s
+    # Eigenes Zeitlimit fuers Aufraeumen: prune liest das halbe Repository und braucht
+    # laenger als eine Sicherung, die nur Aenderungen schreibt.
+    prune-timeout: 4h
+    # Totmannschalter: Wie oft geprueft wird, ob eine Sicherung ausgeblieben ist, und wie
+    # viel Verspaetung vorher geduldet wird.
+    watchdog-interval: 15m
+    watchdog-grace: 30m
+
+  notification:
+    # Wie oft der Postausgang geleert wird. Ein Alarm darf nicht erst nach Minuten
+    # herausgehen, aber im Leerlauf soll auch nicht im Sekundentakt gefragt werden.
+    dispatch-interval: 20s
+    batch-size: 20
+    # Leer lassen: Dann gilt die echte Adresse von Pushover. Nur Tests biegen sie um.
+    pushover-endpoint: ${SIMPLEBACKUP_PUSHOVER_ENDPOINT:}
 
   secrets:
     # Genau eine der beiden Quellen muss gesetzt sein. Die Datei-Variante ist

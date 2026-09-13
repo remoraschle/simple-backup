@@ -14,6 +14,7 @@ import java.util.UUID;
  *
  * @param resticHost Kennung, unter der restic die Snapshots ablegt. Muss stabil bleiben.
  * @param resticTag  Kennzeichnung; begrenzt zugleich, was {@code forget} loeschen darf.
+ * @param notifyOn   wann fuer diesen Plan benachrichtigt wird
  */
 public record ExecutablePlan(
         UUID planId,
@@ -23,10 +24,12 @@ public record ExecutablePlan(
         SourceConfig source,
         List<ExecutableTarget> targets,
         Duration timeout,
-        RetentionRule retention) {
+        RetentionRule retention,
+        NotifyOn notifyOn) {
 
     public ExecutablePlan {
         targets = List.copyOf(targets);
+        notifyOn = notifyOn == null ? NotifyOn.FAILURE : notifyOn;
     }
 
     /** Nur die Ziele, auf die tatsaechlich geschrieben wird. */

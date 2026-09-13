@@ -50,14 +50,22 @@ public class BackupRunner {
     private final SecretRedactor redactor;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Eigenes Zeitlimit fuers Aufraeumen: {@code prune} liest das halbe Repository und
+     * braucht deutlich laenger als die Sicherung selbst, die nur Aenderungen schreibt.
+     */
+    private final Duration pruneTimeout;
+
     BackupRunner(BackupExecutor executor, MountTranslator mountTranslator, CredentialService credentials,
-            ResticOutputParser outputParser, SecretRedactor redactor, ObjectMapper objectMapper) {
+            ResticOutputParser outputParser, SecretRedactor redactor, ObjectMapper objectMapper,
+            RunProperties properties) {
         this.executor = executor;
         this.mountTranslator = mountTranslator;
         this.credentials = credentials;
         this.outputParser = outputParser;
         this.redactor = redactor;
         this.objectMapper = objectMapper;
+        this.pruneTimeout = properties.pruneTimeout();
     }
 
     /**
@@ -123,9 +131,41 @@ public class BackupRunner {
                 "Sicherung auf " + target.name(), backup, repository, mounts, listener,
                 plan.timeout(), null);
 
-        return transfer.successful()
-                ? TargetOutcome.succeeded(target, transfer.summary())
-                : TargetOutcome.failed(target, transfer.message());
+        if (!transfer.successful()) {
+            return TargetOutcome.failed(target, transfer.message());
+        }
+
+        // Schritt 3: aufraeumen. Erst nach erfolgreicher Sicherung -- sonst loeschte eine
+        // Aufbewahrungsregel alte Snapshots, ohne dass ein neuer dazugekommen waere.
+        applyRetention(plan, target, repository, mounts, listener);
+
+        return TargetOutcome.succeeded(target, transfer.summary());
+    }
+
+    /**
+     * Wendet die Aufbewahrungsregel an.
+     *
+     * <p>Ein gescheitertes Aufraeumen macht die Sicherung nicht ungueltig: Die Daten sind
+     * geschrieben. Der Schritt steht trotzdem als fehlgeschlagen in der Historie, denn ein
+     * Repository, das nicht mehr aufgeraeumt wird, laeuft irgendwann voll -- und dann
+     * scheitert auch das Sichern.
+     */
+    private void applyRetention(ExecutablePlan plan, ExecutableTarget target,
+            ResticRepository repository, List<VolumeMount> mounts, RunProgressListener listener) {
+
+        if (plan.retention() == null) {
+            return;
+        }
+        var forget = ResticCommands.forget(plan.retention(), plan.resticHost(), plan.resticTag(),
+                true, false);
+
+        StepOutcome prune = execute(plan, target, StepKind.PRUNE,
+                "Alte Sicherungen aufräumen auf " + target.name(), forget, repository, mounts,
+                listener, pruneTimeout, null);
+
+        if (!prune.successful()) {
+            log.warn("Aufraeumen auf {} fehlgeschlagen: {}", target.name(), prune.message());
+        }
     }
 
     /**
